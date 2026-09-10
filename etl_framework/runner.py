@@ -24,6 +24,8 @@ class ETLRunner:
         self.control = ControlService(context.control_db)
 
     def landing_to_raw(self):
+        processor = "landing_to_raw"
+        started = utc_now(); self.control.processor(self.context.run_id, processor, "RUNNING", started)
         files = discover_csv(self.context, self.control, self.metadata.landing.get("pattern", "*.csv"))
         conn = connect(self.context.raw_db)
         for path in files:
@@ -37,8 +39,11 @@ class ETLRunner:
                 conn.execute(f'INSERT INTO "{table}" ({",".join(chr(34)+n+chr(34) for n in names)}) VALUES ({",".join("?" for _ in vals)})', vals)
             self.control.rows(self.context.run_id, "landing_to_raw", "raw", table, len(rows))
         conn.commit(); conn.close()
+        self.control.processor(self.context.run_id, processor, "SUCCEEDED", started, utc_now())
 
     def raw_to_persistent(self, mapping: TableMapping):
+        processor = "raw_to_persistent"
+        started = utc_now(); self.control.processor(self.context.run_id, processor, "RUNNING", started)
         raw, persistent = connect(self.context.raw_db), connect(self.context.persistent_db)
         audit = [("run_id", "TEXT", False), ("environment", "TEXT", False), ("latest_update_datetime", "TEXT", False), ("latest_insert_datetime", "TEXT", False)]
         create_table(persistent, mapping.target_table, [(c.name, c.data_type, c.nullable) for c in mapping.columns] + audit, mapping.keys)
@@ -60,7 +65,8 @@ class ETLRunner:
             sql = f'INSERT OR REPLACE INTO "{target}" ({",".join(chr(34)+c+chr(34) for c in cols)}) VALUES ({",".join("?" for _ in cols)})'
             persistent.execute(sql, values)
         persistent.commit(); raw.close(); persistent.close()
-        self.control.rows(self.context.run_id, "raw_to_persistent", "persistent", mapping.target_table, inserted, rejected)
+        self.control.rows(self.context.run_id, processor, "persistent", mapping.target_table, inserted, rejected)
+        self.control.processor(self.context.run_id, processor, "SUCCEEDED", started, utc_now())
 
     def run(self):
         started = utc_now(); self.control.run(self.context.run_id, self.context.environment, "RUNNING", started)
