@@ -9,7 +9,7 @@ def test_end_to_end(tmp_path: Path):
     landing = tmp_path / "landing"; landing.mkdir()
     (landing / "customers.csv").write_text("customer_id,name,email\n1,Ada,a@example.com\n1,Dup,a2@example.com\n,Invalid,\n", encoding="utf-8")
     metadata = load_metadata(Path(__file__).parents[1] / "metadata/demo.yml")
-    context = RuntimeContext("run-1", landing, landing / "raw.sqlite", landing / "persistent.sqlite", landing / "consumption.sqlite", landing / "control.sqlite")
+    context = RuntimeContext("run-1", landing_dir=landing, raw_db=landing / "raw.sqlite", persistent_db=landing / "persistent.sqlite", consumption_db=landing / "consumption.sqlite", control_db=landing / "control.sqlite")
     ETLRunner(metadata, context).run()
     db = sqlite3.connect(context.persistent_db)
     assert db.execute("select count(*) from customers").fetchone()[0] == 1
