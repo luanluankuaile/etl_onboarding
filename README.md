@@ -10,7 +10,11 @@ pip install -e '.[test]'
 pytest
 ```
 
-Create `landing/customers.csv` using the columns in `metadata/demo.yml`, then run:
+Create `landing/customers.csv` using the columns in `metadata/demo.yml`, then run either the Python API or CLI:
+
+```bash
+python -m etl_framework metadata/demo.yml --landing landing --environment local
+```
 
 ```python
 from etl_framework.context import RuntimeContext
