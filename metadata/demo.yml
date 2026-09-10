@@ -1,0 +1,21 @@
+landing:
+  pattern: customers.csv
+  raw_table: customers
+raw:
+  database: raw.sqlite
+persistent:
+  - name: customers
+    source_table: customers
+    target_table: customers
+    keys: [customer_id]
+    deduplicate_by: [customer_id]
+    dq_quarantine_table: customers__quarantine
+    columns:
+      - {name: customer_id, source: customer_id, type: INTEGER, nullable: false}
+      - {name: name, source: name, type: TEXT, nullable: false}
+      - {name: email, source: email, type: TEXT, nullable: true}
+consumption:
+  - name: customer_emails
+    sql: |
+      CREATE TABLE IF NOT EXISTS customer_emails AS
+      SELECT customer_id, email FROM source.customers WHERE email IS NOT NULL;
