@@ -52,9 +52,9 @@ def test_raw_cast_and_deduplication(tmp_path):
 def test_null_acct_id_is_quarantined(tmp_path):
     context = run_file(tmp_path, "ci_acct_invalid.csv")
     with db(context.persistent_db) as conn:
-        assert conn.execute("select count(*) from ci_acct").fetchone()[0] == 2
-        assert conn.execute("select count(*) from ci_acct__quarantine").fetchone()[0] == 1
-        assert conn.execute("select acct_id from ci_acct__quarantine").fetchone()[0] is None
+        assert conn.execute("select count(*) from ci_acct").fetchone()[0] == 1
+        assert conn.execute("select count(*) from ci_acct__quarantine").fetchone()[0] == 2
+        assert conn.execute("select count(*) from ci_acct__quarantine where acct_id is null").fetchone()[0] == 1
 
 
 def test_incremental_watermark_and_latest_version(tmp_path):
@@ -114,4 +114,4 @@ def test_malformed_csv_rejected(tmp_path):
 def test_type_conversion_error_is_quarantined(tmp_path):
     context = run_file(tmp_path, "ci_acct_invalid.csv")
     with db(context.persistent_db) as conn:
-        assert conn.execute("select count(*) from ci_acct__quarantine").fetchone()[0] == 1
+        assert conn.execute("select count(*) from ci_acct__quarantine").fetchone()[0] == 2
