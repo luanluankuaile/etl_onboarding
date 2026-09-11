@@ -19,6 +19,19 @@ def test_ci_acct_end_to_end(tmp_path: Path):
     db.close()
 
 
+def test_ci_acct_manifest_is_idempotent_and_retries_after_failure(tmp_path: Path):
+    landing = tmp_path / "landing"; landing.mkdir()
+    fixture = Path(__file__).parent / "fixtures/ci_acct_sample.csv"
+    (landing / "ci_acct.csv").write_bytes(fixture.read_bytes())
+    context = RuntimeContext("retry-run", landing_dir=landing, raw_db=tmp_path/"raw.sqlite", persistent_db=tmp_path/"persistent.sqlite", consumption_db=tmp_path/"consumption.sqlite", control_db=tmp_path/"control.sqlite")
+    metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
+    ETLRunner(metadata, context).run()
+    ETLRunner(metadata, RuntimeContext("second-run", landing_dir=landing, raw_db=tmp_path/"raw.sqlite", persistent_db=tmp_path/"persistent.sqlite", consumption_db=tmp_path/"consumption.sqlite", control_db=tmp_path/"control.sqlite")).run()
+    control = sqlite3.connect(context.control_db)
+    assert control.execute("select count(*) from file_manifests").fetchone()[0] == 1
+    control.close()
+
+
 def test_ci_acct_metadata_and_manifest_contract(tmp_path: Path):
     metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
     mapping = metadata.persistent[0]
