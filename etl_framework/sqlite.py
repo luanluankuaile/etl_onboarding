@@ -9,7 +9,7 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
-def create_table(conn, table: str, columns: Iterable[tuple[str, str, bool]], keys: list[str] = []):
+def create_table(conn, table: str, columns: Iterable[tuple[str, str, bool]], keys: list[str] | None = None):
     defs = [f'"{n}" {typ}' + (" NOT NULL" if not nullable else "") for n, typ, nullable in columns]
-    if keys: defs.append("PRIMARY KEY (" + ",".join('"'+k+'"' for k in keys) + ")")
+    if keys: defs.append("PRIMARY KEY (" + ",".join('"' + k + '"' for k in keys) + ")")
     conn.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({", ".join(defs)})')
