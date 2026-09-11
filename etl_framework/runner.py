@@ -1,7 +1,8 @@
 import csv
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import re
 from pathlib import Path
 from .context import RuntimeContext, utc_now
 from .control import ControlService
@@ -12,17 +13,20 @@ from .transforms import run_sql
 
 
 def cast(value, data_type):
-    """Cast a source value and validate the small SQLite type vocabulary."""
-    if value in (None, ""):
+    """Cast a source value and validate the supported metadata types strictly."""
+    if value is None or (isinstance(value, str) and value == ""):
         return None
     kind = data_type.upper()
     if kind.startswith("INT"):
-        return int(value)
+        return int(str(value).strip())
     if kind.startswith(("REAL", "FLOAT", "DECIMAL")):
-        return float(value)
+        return float(str(value).strip())
     if kind == "DATE":
-        datetime.fromisoformat(value)
-        return value
+        text = str(value)
+        if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", text):
+            raise ValueError("DATE must use YYYY-MM-DD format")
+        date.fromisoformat(text)
+        return text
     return value
 
 
@@ -65,33 +69,54 @@ class ETLRunner:
         create_table(persistent, quarantine, [(c.name, c.data_type, True) for c in mapping.columns] + audit)
         rows = raw.execute(f'SELECT * FROM "{mapping.source_table}"').fetchall()
         seen = set(); inserted = rejected = 0
-        watermark = self.control.watermark(mapping.source_table)
-        max_watermark = watermark
+        watermark_key = mapping.keys[0] if mapping.keys else None
         for source_row in rows:
             try:
                 values = [cast(source_row[c.source or c.name], c.data_type) for c in mapping.columns]
                 invalid = any(v is None and not c.nullable for v, c in zip(values, mapping.columns))
+                current = (cast(source_row[mapping.watermark_column], mapping.watermark_type)
+                           if mapping.watermark_column else None)
+                key_value = source_row[watermark_key] if watermark_key else "__table__"
+                if key_value is None or (isinstance(key_value, str) and not key_value.strip()):
+                    invalid = True
             except (TypeError, ValueError):
                 values = [source_row[c.source or c.name] for c in mapping.columns]
+                current = None
+                key_value = source_row[watermark_key] if watermark_key else "__table__"
                 invalid = True
-            current = source_row[mapping.watermark_column] if mapping.watermark_column else None
-            if watermark is not None and current is not None and current <= watermark:
+
+            # Validate and apply the per-key watermark before deduplication. An invalid
+            # duplicate therefore cannot hide a later valid row.
+            stored = (self.control.watermark_for_key(mapping.source_table, key_value)
+                      if mapping.watermark_column else None)
+            stored_value = cast(stored, mapping.watermark_type) if stored is not None else None
+            if not invalid and current is not None and stored_value is not None and current <= stored_value:
                 continue
-            if invalid: target, rejected = quarantine, rejected + 1
-            else: target, inserted = mapping.target_table, inserted + 1
-            if current is not None and (max_watermark is None or current > max_watermark):
-                max_watermark = current
-            now = utc_now(); values += [self.context.run_id, self.context.environment, now, now]
-            if mapping.deduplicate_by:
-                dedup = tuple(source_row[k] for k in mapping.deduplicate_by)
-                if dedup in seen: continue
+            dedup = tuple(source_row[k] for k in mapping.deduplicate_by) if mapping.deduplicate_by else None
+            if dedup is not None and dedup in seen:
+                continue
+            if invalid:
+                target = quarantine; rejected += 1
+            else:
+                target = mapping.target_table; inserted += 1
+                if mapping.watermark_column and current is not None:
+                    self.control.set_watermark_for_key(mapping.source_table, key_value, str(current))
+            if dedup is not None:
                 seen.add(dedup)
+
+            now = utc_now()
+            insert_audit = now
+            if target == mapping.target_table and not invalid and mapping.keys:
+                existing = persistent.execute(
+                    f'SELECT latest_insert_datetime FROM "{mapping.target_table}" WHERE "{mapping.keys[0]}"=?',
+                    (key_value,)).fetchone()
+                if existing:
+                    insert_audit = existing[0]
+            values += [self.context.run_id, self.context.environment, now, insert_audit]
             cols = [c.name for c in mapping.columns] + [a[0] for a in audit]
             sql = f'INSERT OR REPLACE INTO "{target}" ({",".join(chr(34)+c+chr(34) for c in cols)}) VALUES ({",".join("?" for _ in cols)})'
             persistent.execute(sql, values)
         persistent.commit()
-        if mapping.watermark_column and max_watermark is not None:
-            self.control.set_watermark(mapping.source_table, max_watermark)
         raw.close(); persistent.close()
         self.control.rows(self.context.run_id, processor, "persistent", mapping.target_table, inserted, rejected)
         self.control.processor(self.context.run_id, processor, "SUCCEEDED", started, utc_now())
