@@ -75,7 +75,12 @@ class ETLRunner:
                 self.landing_to_raw()
                 for mapping in self.metadata.persistent: self.raw_to_persistent(mapping)
             for item in self.metadata.consumption:
-                if "sql" in item: run_sql(item["sql"], self.context.persistent_db, self.context.consumption_db)
+                # Lineage-only entries describe downstream ownership but do not
+                # authorize execution of a SQL transformation.
+                if item.get("lineage_only", False):
+                    continue
+                if "sql" in item:
+                    run_sql(item["sql"], self.context.persistent_db, self.context.consumption_db)
             self.control.run(self.context.run_id, self.context.environment, "SUCCEEDED", started, utc_now())
         except Exception as exc:
             self.control.run(self.context.run_id, self.context.environment, "FAILED", started, utc_now(), str(exc)); raise
