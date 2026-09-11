@@ -90,7 +90,7 @@ class ETLRunner:
     def _run_ci_acct(self):
         """Run CI_ACCT-specific Landing/Raw/Persistent processing."""
         from . import ci_acct
-        files = discover_csv(self.context, self.control, self.metadata.landing.get("file_pattern", "*.csv"))
+        files = discover_csv(self.context, self.control, self.metadata.landing.get("pattern", self.metadata.landing.get("file_pattern", "*.csv")))
         rows = []
         for path in files:
             csv_rows = read_csv(path)
