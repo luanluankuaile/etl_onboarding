@@ -1,0 +1,24 @@
+job: ci_acct_onboarding
+entity: CI_ACCT
+schedule: "0 4 * * *"
+metadata: metadata/ci_acct.yml
+source:
+  connector: approved_sharepoint
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
+steps:
+  - name: landing
+    processor: etl_framework.ci_acct_pipeline.discover_and_validate
+  - name: raw
+    processor: etl_framework.ci_acct_pipeline.raw_select
+    depends_on: [landing]
+  - name: persistent
+    processor: etl_framework.ci_acct_persistent.merge_scd1
+    depends_on: [raw]
+  - name: advance_watermark
+    depends_on: [persistent]
+    condition: all_previous_steps_succeeded
+controls:
+  idempotency: source_file_checksum
+  dq_failure_action: quarantine
+  audit: run_id,source_file,source_file_checksum,source_row_number
+  approval_gate: required_before_production

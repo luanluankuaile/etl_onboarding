@@ -1,0 +1,53 @@
+dataset:
+  name: CI_ACCT
+  source_system: SHAREPOINT
+  source_object: CI_ACCT
+  scd_type: SCD1
+  business_key: [acct_id]
+  incremental_key: [acct_id, version]
+source:
+  file_pattern: "*.csv"
+  encoding: utf-8-sig
+  delimiter: ","
+  multiple_files_policy: process_all_unseen_files
+  authentication_reference: SHAREPOINT_CI_ACCT_CONNECTION
+columns:
+  - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
+  - {name: version, source: version, type: INTEGER, nullable: false}
+  - {name: source_column_03, source: source_column_03, type: TEXT, nullable: true}
+  - {name: source_column_04, source: source_column_04, type: TEXT, nullable: true}
+  - {name: source_column_05, source: source_column_05, type: TEXT, nullable: true}
+  - {name: source_column_06, source: source_column_06, type: TEXT, nullable: true}
+  - {name: source_column_07, source: source_column_07, type: TEXT, nullable: true}
+  - {name: source_column_08, source: source_column_08, type: TEXT, nullable: true}
+  - {name: source_column_09, source: source_column_09, type: TEXT, nullable: true}
+  - {name: source_column_10, source: source_column_10, type: TEXT, nullable: true}
+  - {name: source_column_11, source: source_column_11, type: TEXT, nullable: true}
+  - {name: source_column_12, source: source_column_12, type: TEXT, nullable: true}
+  - {name: source_column_13, source: source_column_13, type: TEXT, nullable: true}
+  - {name: source_column_14, source: source_column_14, type: TEXT, nullable: true}
+  - {name: source_column_15, source: source_column_15, type: TEXT, nullable: true}
+  - {name: source_column_16, source: source_column_16, type: TEXT, nullable: true}
+  - {name: source_column_17, source: source_column_17, type: TEXT, nullable: true}
+  - {name: source_column_18, source: source_column_18, type: TEXT, nullable: true}
+incremental:
+  late_arrival_policy: ignore_if_older_than_persistent
+  version_precedence: highest_valid_version
+  same_version_policy: deterministic_physical_row_and_audit
+  file_modified_time_is_authoritative: false
+dq_rules:
+  - {rule_id: CI_ACCT_DQ_003, name: duplicate_composite_key, action: deduplicate_and_audit_winner, severity: warning}
+landing:
+  pattern: "*.csv"
+  raw_table: raw_cust_ci_acct
+persistent:
+  - name: ci_acct
+    source_table: raw_cust_ci_acct
+    target_table: per_cust_ci_acct
+    keys: [acct_id]
+    deduplicate_by: [acct_id, version]
+    dq_quarantine_table: raw_cust_ci_acct__quarantine
+    columns: []
+consumption:
+  - name: csp_dim_account
+    sql: "CREATE VIEW IF NOT EXISTS csp_dim_account AS SELECT * FROM source.per_cust_ci_acct;"
