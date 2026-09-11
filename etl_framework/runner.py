@@ -71,9 +71,32 @@ class ETLRunner:
     def run(self):
         started = utc_now(); self.control.run(self.context.run_id, self.context.environment, "RUNNING", started)
         try:
-            self.landing_to_raw()
-            for mapping in self.metadata.persistent: self.raw_to_persistent(mapping)
+            # Check if this is a CI_ACCT dataset and use specialized processor
+            if self._is_ci_acct_dataset():
+                self._run_ci_acct()
+            else:
+                self.landing_to_raw()
+                for mapping in self.metadata.persistent: self.raw_to_persistent(mapping)
             for item in self.metadata.consumption: run_sql(item["sql"], self.context.persistent_db, self.context.consumption_db)
             self.control.run(self.context.run_id, self.context.environment, "SUCCEEDED", started, utc_now())
         except Exception as exc:
             self.control.run(self.context.run_id, self.context.environment, "FAILED", started, utc_now(), str(exc)); raise
+
+    def _is_ci_acct_dataset(self) -> bool:
+        """Check if this metadata is for CI_ACCT dataset."""
+        landing_table = self.metadata.landing.get("table", "")
+        return "ci_acct" in landing_table.lower()
+
+    def _run_ci_acct(self):
+        """Run CI_ACCT-specific Landing/Raw/Persistent processing."""
+        from . import ci_acct
+        files = discover_csv(self.context, self.control, self.metadata.landing.get("file_pattern", "*.csv"))
+        rows = []
+        for path in files:
+            csv_rows = read_csv(path)
+            for row in csv_rows:
+                row["_path"] = path
+                row["_ingestion_ts"] = utc_now()
+                rows.append(row)
+        if rows:
+            ci_acct.run(self.context.raw_db, self.context.persistent_db, rows, self.context.run_id)
