@@ -2,7 +2,7 @@ import csv
 import hashlib
 from pathlib import Path
 from .control import ControlService
-from .context import RuntimeContext, utc_now
+from .context import RuntimeContext
 
 
 def discover_csv(context: RuntimeContext, control: ControlService, pattern: str = "*.csv") -> list[Path]:
