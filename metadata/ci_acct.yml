@@ -10,7 +10,8 @@ persistent:
     keys: [acct_id]
     deduplicate_by: [acct_id, version]
     watermark_column: version
-    watermark_type: TEXT
+    # Version is an account-level revision; watermarks are stored per acct_id.
+    watermark_type: INTEGER
     dq_quarantine_table: ci_acct__quarantine
     columns:
       - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
