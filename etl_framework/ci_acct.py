@@ -15,7 +15,6 @@ def _date(value):
     if value is None or not value.strip(): return None
     return datetime.strptime(value.strip(), "%m/%d/%Y").date().isoformat()
 
-def _clean(row):
     out = {c: (row.get(c) or "").strip() or None for c in COLUMNS}
     for c in DATES: out[c] = _date(out[c])
     if out["version"] is not None: out["version"] = int(out["version"])
@@ -26,10 +25,10 @@ def run_ci_acct(context, control, pattern="*.csv"):
     raw = connect(context.raw_db); persistent = connect(context.persistent_db)
     landing_cols = [(c, "TEXT", True) for c in COLUMNS] + [(c, "TEXT", True) for c in ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]]
     raw_audit = ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]
-    raw_cols = ([(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS]
+    raw_cols = [(c, "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
                 + [(c, "TEXT", True) for c in raw_audit]
                 + [("row_status", "TEXT", False)])
-    create_table(raw, "land_cust_ci_acct", landing_cols)
+    create_table(persistent, "per_cust_ci_acct", [(c, "TEXT", c == "acct_id") for c in COLUMNS] + audit, ["acct_id"])
     create_table(raw, "raw_cust_ci_acct", raw_cols)
     create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
     audit = [("run_id", "TEXT", False), ("environment", "TEXT", False), ("latest_update_datetime", "TEXT", False), ("latest_insert_datetime", "TEXT", False), ("_record_hash", "TEXT", False)]
@@ -57,9 +56,10 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 if not row.get("acct_id"):
                     status = "invalid"
                     rejected += 1
-                elif row.get("acct_id") in seen:
-                    status = "duplicate"
-                else:
+    # Version is opaque source text, never a watermark. For deterministic
+    # duplicate resolution only, use an explicitly documented lexical tie-break.
+    rows = raw.execute("SELECT rowid, * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version COLLATE BINARY, rowid").fetchall()
+        if r['acct_id'] not in winners or (r['version'] or "") >= (winners[r['acct_id']]['version'] or ""): winners[r['acct_id']] = r
                     seen.add(row.get("acct_id"))
                 vals = ([row[c] for c in COLUMNS]
                         + [path.name, str(path), now, context.run_id, checksum]
