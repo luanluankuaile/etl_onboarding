@@ -54,3 +54,37 @@ def test_ci_acct_metadata_and_manifest_contract(tmp_path: Path):
     db = sqlite3.connect(context.raw_db)
     assert db.execute("select count(*) from land_cust_ci_acct").fetchone()[0] == 5
     db.close()
+
+
+def _run_fixture(tmp_path: Path, content: str):
+    landing = tmp_path / "landing"; landing.mkdir()
+    (landing / "input.csv").write_text(content, encoding="utf-8")
+    context = RuntimeContext("negative-run", landing_dir=landing, raw_db=tmp_path/"raw.sqlite", persistent_db=tmp_path/"persistent.sqlite", consumption_db=tmp_path/"consumption.sqlite", control_db=tmp_path/"control.sqlite")
+    metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
+    ETLRunner(metadata, context).run()
+    return context
+
+
+def test_ci_acct_invalid_key_and_date_are_quarantined(tmp_path: Path):
+    fixture = (Path(__file__).parent / "fixtures/ci_acct_sample.csv").read_text(encoding="utf-8")
+    fixture = fixture.replace("00001,M,1/2/2024", ",M,not-a-date", 1)
+    context = _run_fixture(tmp_path, fixture)
+    db = sqlite3.connect(context.raw_db)
+    assert db.execute("select count(*) from raw_cust_ci_acct__quarantine").fetchone()[0] == 1
+    assert db.execute("select acct_id, setup_dt from raw_cust_ci_acct__quarantine").fetchone() == (None, "not-a-date")
+    db.close()
+
+
+def test_ci_acct_schema_mismatch_fails_before_processing(tmp_path: Path):
+    landing = tmp_path / "landing"; landing.mkdir()
+    (landing / "bad.csv").write_text("acct_id,wrong_column\\n1,x\\n", encoding="utf-8")
+    context = RuntimeContext("schema-run", landing_dir=landing, raw_db=tmp_path/"raw.sqlite", persistent_db=tmp_path/"persistent.sqlite", consumption_db=tmp_path/"consumption.sqlite", control_db=tmp_path/"control.sqlite")
+    metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
+    try:
+        ETLRunner(metadata, context).run()
+        assert False, "expected strict schema validation failure"
+    except ValueError as exc:
+        assert "header mismatch" in str(exc)
+    db = sqlite3.connect(context.raw_db)
+    assert db.execute("select count(*) from sqlite_master where name='land_cust_ci_acct'").fetchone()[0] == 1
+    db.close()
