@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 from etl_framework.context import RuntimeContext
+from etl_framework.control import ControlService
 from etl_framework.metadata import load_metadata
 from etl_framework.runner import ETLRunner
 
