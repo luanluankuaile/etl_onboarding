@@ -25,11 +25,15 @@ def checksum(path: Path) -> str:
     return digest.hexdigest()
 
 
-def discover_and_validate(paths: Iterable[Path]) -> list[dict[str, Any]]:
-    """Read valid CSV files and attach immutable ingestion audit metadata."""
+def discover_and_validate(paths: Iterable[Path], processed_checksums: set[str] | None = None) -> list[dict[str, Any]]:
+    """Read valid CSV files and attach audit metadata; skip known checksums."""
     result = []
+    processed_checksums = processed_checksums if processed_checksums is not None else set()
     for path in sorted(paths):
         file_checksum = checksum(path)
+        if file_checksum in processed_checksums:
+            continue
+        processed_checksums.add(file_checksum)
         with path.open(newline="", encoding="utf-8-sig") as stream:
             reader = csv.DictReader(stream)
             if not reader.fieldnames or not set(REQUIRED_COLUMNS).issubset(reader.fieldnames):
