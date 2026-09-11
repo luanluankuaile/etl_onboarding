@@ -1,7 +1,7 @@
 """CI_ACCT onboarding processors; kept behind metadata-driven runner dispatch."""
 import csv
 import hashlib
-import sqlite3
+
 from datetime import datetime
 from pathlib import Path
 from .context import utc_now
@@ -25,7 +25,10 @@ def run_ci_acct(context, control, pattern="*.csv"):
     files = discover_csv(context, control, pattern)
     raw = connect(context.raw_db); persistent = connect(context.persistent_db)
     landing_cols = [(c, "TEXT", True) for c in COLUMNS] + [(c, "TEXT", True) for c in ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]]
-    raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
+    raw_audit = ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]
+    raw_cols = ([(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS]
+                + [(c, "TEXT", True) for c in raw_audit]
+                + [("row_status", "TEXT", False)])
     create_table(raw, "land_cust_ci_acct", landing_cols)
     create_table(raw, "raw_cust_ci_acct", raw_cols)
     create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
@@ -45,8 +48,12 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 landing = [source.get(c) for c in COLUMNS] + [path.name, str(path), now, context.run_id, checksum]
                 raw.execute('INSERT INTO "land_cust_ci_acct" VALUES (' + ','.join('?' for _ in landing) + ')', landing)
                 status = "valid"
-                try: row = _clean(source)
-                except (TypeError, ValueError): row, status = _clean({c: None for c in COLUMNS}), "invalid"
+                try:
+                    row = _clean(source)
+                except (TypeError, ValueError):
+                    # Preserve source values and key for quarantine diagnostics.
+                    row = {c: (source.get(c) or "").strip() or None for c in COLUMNS}
+                    status = "invalid"
                 if not row.get("acct_id"):
                     status = "invalid"
                     rejected += 1
@@ -54,7 +61,9 @@ def run_ci_acct(context, control, pattern="*.csv"):
                     status = "duplicate"
                 else:
                     seen.add(row.get("acct_id"))
-                vals = [row[c] for c in COLUMNS] + [status]
+                vals = ([row[c] for c in COLUMNS]
+                        + [path.name, str(path), now, context.run_id, checksum]
+                        + [status])
                 target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
                 raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join('?' for _ in vals) + ')', vals)
     # Highest version wins; INSERT OR REPLACE provides Type 1 overwrite semantics.
