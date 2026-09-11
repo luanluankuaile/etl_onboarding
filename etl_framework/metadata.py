@@ -47,9 +47,8 @@ def load_metadata(path: str | Path) -> Metadata:
         item.setdefault("source_table", data.get("raw", {}).get("table"))
         item.setdefault("target_table", item.get("table"))
         persistent_config = [item]
-    for item in persistent_config:
     registered_columns = data.get("columns", [])
-    for item in data.get("persistent", []):
+    for item in persistent_config:
         item = dict(item)
         item["columns"] = item.get("columns") or registered_columns
         columns = [Column(name=c["name"], source=c.get("source"),
