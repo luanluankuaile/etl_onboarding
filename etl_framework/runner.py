@@ -101,7 +101,7 @@ class ETLRunner:
                 target = mapping.target_table; inserted += 1
                 if mapping.watermark_column and current is not None:
                     self.control.set_watermark_for_key(mapping.source_table, key_value, str(current))
-            if dedup is not None:
+            if dedup is not None and not invalid:
                 seen.add(dedup)
 
             now = utc_now()
