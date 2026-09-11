@@ -6,20 +6,19 @@ source:
   connection_secret: SHAREPOINT_CI_ACCT_CONNECTION
   schedule: "0 4 * * *"
   load_mode: incremental
-  # File-manifest incremental processing is used; no source watermark is provided.
+  watermark_column: null
 landing:
   table: land_cust_ci_acct
   processor: ci_acct
   pattern: "*.csv"
   immutable: true
   audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
-- File delimiter and date format require source-owner confirmation. The local processor reads `ci_acct_date_format` from runtime context; `M/d/yyyy` is fixture-only.
-- `version` remains a source STRING in Landing, Raw, and Persistent. Numeric-looking values are used only for deterministic ordering and are never stored as integers; invalid values are quarantined.
+raw:
   table: raw_cust_ci_acct
   row_status_values: [valid, invalid, duplicate]
-  # Fixture-only format; source-owner confirmation is required before production.
   date_format: "M/d/yyyy"
-  preserve_string_columns: [acct_id]
+  version_type: TEXT
+  preserve_string_columns: [acct_id, version]
   dq_quarantine_table: raw_cust_ci_acct__quarantine
 persistent:
   - name: ci_acct
@@ -27,7 +26,7 @@ persistent:
     target_table: per_cust_ci_acct
     keys: [acct_id]
     deduplicate_by: [acct_id]
-    # Deliberately omitted: source watermark is not provided.
+    watermark_column: null
     columns:
       - {name: acct_id, type: TEXT, nullable: false}
       - {name: bill_cyc_cd, type: TEXT}
@@ -46,40 +45,18 @@ persistent:
       - {name: cust_cl_cd, type: TEXT}
       - {name: bill_prt_intercept, type: TEXT}
       - {name: no_dep_rvw_sw, type: TEXT}
-      - {name: version, type: INTEGER}
+      - {name: version, type: TEXT}
 consumption:
   - name: csp_dim_account
     target_table: csp_dim_account
-    sql: |
-      - {name: version, type: TEXT}
-      SELECT acct_id, currency_cd, acct_mgmt_grp, version
-      FROM source.per_cust_ci_acct;
-      - {name: version, type: TEXT}
-  - {name: acct_id, type: TEXT, nullable: false}
-  - {name: bill_cyc_cd, type: TEXT}
-  - {name: setup_dt, type: DATE}
-  - {name: currency_cd, type: TEXT}
-  - {name: acct_mgmt_grp, type: TEXT}
-  - {name: bill_after_dt, type: DATE}
-  - {name: protect_cyc_sw, type: TEXT}
-  - {name: cis_division, type: TEXT}
-  - {name: mailing_prem_id, type: TEXT}
-  - {name: protect_prem_sw, type: TEXT}
-  - {name: coll_cl_cd, type: TEXT}
-  - {name: cr_review_dt, type: DATE}
-  - {name: postpone_cr_rvw_dt, type: DATE}
-  - {name: int_cr_review_sw, type: TEXT}
-  - {name: cust_cl_cd, type: TEXT}
-  - {name: bill_prt_intercept, type: TEXT}
-  - {name: no_dep_rvw_sw, type: TEXT}
-  - {name: version, type: INTEGER}
+    lineage_only: true
 quality:
-  - {name: acct_id_not_null, expression: "acct_id IS NOT NULL AND TRIM(acct_id) <> ''", action: reject}
-  - {name: acct_id_unique, expression: "one valid row per acct_id after version deduplication", action: reject_duplicate}
-  - {name: date_format, expression: "all populated date columns parse as M/d/yyyy", action: reject}
-  - {name: version, type: TEXT}
+  - {name: acct_id_not_null, expression: "acct_id IS NOT NULL AND TRIM(acct_id) <> ''", action: quarantine}
+  - {name: acct_id_unique, expression: "one deterministic winner per acct_id", action: quarantine}
+  - {name: date_format, expression: "all populated dates parse using configured raw.date_format", action: quarantine}
+lineage:
   source: SharePoint:/Documents/share/temp/bamboo_ai/source/*.csv
   landing: land_cust_ci_acct
-  - {name: date_format, expression: "all populated dates parse using configured raw.date_format", action: reject}
+  raw: raw_cust_ci_acct
   persistent: per_cust_ci_acct
   consumption: csp_dim_account
