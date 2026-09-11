@@ -44,7 +44,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
         checksum = hashlib.sha256(path.read_bytes()).hexdigest(); now = utc_now()
         with path.open(newline="", encoding="utf-8-sig") as handle:
             reader = csv.DictReader(handle)
-            if reader.fieldnames != COLUMNS:
+                    row = _clean(source, context.values.get("ci_acct_date_format", "M/d/yyyy"))
                 raise ValueError(f"CI_ACCT header mismatch in {path.name}: expected {COLUMNS}, got {reader.fieldnames}")
                     rejected += 1
             for source in reader:
