@@ -12,7 +12,7 @@ class ControlService:
             CREATE TABLE IF NOT EXISTS processors (run_id TEXT, processor TEXT, status TEXT, started_at TEXT, ended_at TEXT, error TEXT);
             CREATE TABLE IF NOT EXISTS row_counts (run_id TEXT, processor TEXT, layer TEXT, table_name TEXT, inserted INTEGER, rejected INTEGER);
             CREATE TABLE IF NOT EXISTS watermarks (source_table TEXT PRIMARY KEY, value TEXT);
-            CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT);
+            CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT, checksum TEXT);
             """)
 
     def connection(self):
@@ -39,8 +39,13 @@ class ControlService:
         with self.connection() as c:
             c.execute("INSERT OR REPLACE INTO watermarks VALUES (?,?)", (table, value))
 
-    def manifest(self, path: str, size: int, modified: float, run_id: str, processed_at: str) -> bool:
+    def manifest(self, path: str, size: int, modified: float, checksum: str | None = None) -> bool:
+        """Return whether a file is eligible; do not mark it processed yet."""
         with self.connection() as c:
-            if c.execute("SELECT 1 FROM file_manifests WHERE path=?", (path,)).fetchone(): return False
-            c.execute("INSERT INTO file_manifests VALUES (?,?,?,?,?)", (path, size, modified, processed_at, run_id))
-            return True
+            row = c.execute("SELECT checksum, size, modified FROM file_manifests WHERE path=?", (path,)).fetchone()
+            return row is None or row[0] != checksum or row[1] != size or row[2] != modified
+
+    def record_manifest(self, path: str, size: int, modified: float, run_id: str, processed_at: str, checksum: str):
+        with self.connection() as c:
+            c.execute("INSERT OR REPLACE INTO file_manifests VALUES (?,?,?,?,?,?)",
+                      (path, size, modified, processed_at, run_id, checksum))
