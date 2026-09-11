@@ -19,11 +19,25 @@ def test_ci_acct_end_to_end(tmp_path: Path):
     db.close()
 
 
-def test_ci_acct_date_and_blank_handling(tmp_path: Path):
+def test_ci_acct_metadata_and_manifest_contract(tmp_path: Path):
+    metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
+    mapping = metadata.persistent[0]
+    assert metadata.landing["table"] == "land_cust_ci_acct"
+    assert metadata.raw["table"] == "raw_cust_ci_acct"
+    assert mapping.target_table == "per_cust_ci_acct"
+    assert mapping.keys == ["acct_id"]
+    assert mapping.watermark_column is None
+    assert len(mapping.columns) == 18
+    assert mapping.columns[0].nullable is False
+    assert [c.data_type for c in mapping.columns if c.data_type == "DATE"] == ["DATE"] * 4
+
     landing = tmp_path / "landing"; landing.mkdir()
-    (landing / "one.csv").write_text("acct_id,setup_dt,version\n00001,1/2/2024,1\n", encoding="utf-8")
+    fixture = Path(__file__).parent / "fixtures/ci_acct_sample.csv"
+    (landing / "ci_acct.csv").write_bytes(fixture.read_bytes())
     root = tmp_path
-    context = RuntimeContext("date-run", landing_dir=landing, raw_db=root/"raw.sqlite", persistent_db=root/"persistent.sqlite", consumption_db=root/"consumption.sqlite", control_db=root/"control.sqlite")
-    ETLRunner(load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml"), context).run()
-    db = sqlite3.connect(context.persistent_db)
-    assert db.execute("select setup_dt from per_cust_ci_acct").fetchone()[0] == "2024-01-02"
+    context = RuntimeContext("manifest-run-1", landing_dir=landing, raw_db=root/"raw.sqlite", persistent_db=root/"persistent.sqlite", consumption_db=root/"consumption.sqlite", control_db=root/"control.sqlite")
+    ETLRunner(metadata, context).run()
+    ETLRunner(metadata, RuntimeContext("manifest-run-2", landing_dir=landing, raw_db=root/"raw.sqlite", persistent_db=root/"persistent.sqlite", consumption_db=root/"consumption.sqlite", control_db=root/"control.sqlite")).run()
+    db = sqlite3.connect(context.raw_db)
+    assert db.execute("select count(*) from land_cust_ci_acct").fetchone()[0] == 5
+    db.close()
