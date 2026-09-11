@@ -6,7 +6,7 @@ source:
   connection_secret: SHAREPOINT_CI_ACCT_CONNECTION
   schedule: "0 4 * * *"
   load_mode: incremental
-  # File-manifest incremental processing is used; no watermark_column is provided.
+  # File-manifest incremental processing is used; no source watermark is provided.
 landing:
   table: land_cust_ci_acct
   processor: ci_acct
