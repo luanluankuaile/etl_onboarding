@@ -27,10 +27,17 @@ def _clean(source):
     return row
 
 
+def _version_key(value):
+    """Compare version as a non-negative decimal integer; retain original TEXT."""
+    return int(value)
+
+
 def run_ci_acct(context, control, pattern="*.csv"):
     files = discover_csv(context, control, pattern)
     raw, persistent = connect(context.raw_db), connect(context.persistent_db)
+    landing_cols = [(c, "TEXT", True) for c in COLUMNS]
     raw_cols = [(c, "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
+    create_table(raw, "land_cust_ci_acct", landing_cols)
     create_table(raw, "raw_cust_ci_acct", raw_cols)
     create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
     audit = [("run_id", "TEXT", False), ("environment", "TEXT", False), ("latest_update_datetime", "TEXT", False), ("latest_insert_datetime", "TEXT", False), ("_record_hash", "TEXT", False)]
@@ -42,6 +49,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
             if reader.fieldnames != COLUMNS:
                 raise ValueError(f"CI_ACCT header mismatch in {path.name}")
             for source in reader:
+                raw.execute('INSERT INTO "land_cust_ci_acct" VALUES (' + ','.join('?' for _ in COLUMNS) + ')', [source.get(c) for c in COLUMNS])
                 status = "valid"
                 try:
                     row = _clean(source)
@@ -54,7 +62,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
                     continue
                 key = row["acct_id"]
                 previous = winners.get(key)
-                if previous is None or row["version"] > previous["version"]:
+                if previous is None or _version_key(row["version"]) > _version_key(previous["version"]):
                     winners[key] = row
                 raw.execute('INSERT INTO "raw_cust_ci_acct" VALUES (' + ','.join('?' for _ in raw_cols) + ')', [row[c] for c in COLUMNS] + [status])
         control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime, context.run_id, utc_now(), file_checksum(path))
@@ -62,7 +70,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
         payload = [row[c] for c in COLUMNS]
         digest = hashlib.sha256("|".join(str(v or "") for v in payload).encode()).hexdigest()
         existing = persistent.execute('SELECT version, run_id, latest_insert_datetime FROM per_cust_ci_acct WHERE acct_id=?', (key,)).fetchone()
-        if existing and row["version"] < existing[0]:
+        if existing and _version_key(row["version"]) < _version_key(existing[0]):
             continue
         now = utc_now()
         if existing is None:
