@@ -19,13 +19,31 @@ raw:
   preserve_string_columns: [acct_id]
   dq_quarantine_table: raw_cust_ci_acct__quarantine
 persistent:
-  table: per_cust_ci_acct
-  scd_type: 1
-  keys: [acct_id]
-  deduplicate_by: [acct_id]
-  deduplicate_tiebreaker: version
-  change_hash: _record_hash
-  audit_columns: [run_id, environment, latest_update_datetime, latest_insert_datetime]
+  - name: ci_acct
+    source_table: raw_cust_ci_acct
+    target_table: per_cust_ci_acct
+    keys: [acct_id]
+    deduplicate_by: [acct_id]
+    watermark_column: version
+    columns:
+      - {name: acct_id, type: TEXT, nullable: false}
+      - {name: bill_cyc_cd, type: TEXT}
+      - {name: setup_dt, type: TEXT}
+      - {name: currency_cd, type: TEXT}
+      - {name: acct_mgmt_grp, type: TEXT}
+      - {name: bill_after_dt, type: TEXT}
+      - {name: protect_cyc_sw, type: TEXT}
+      - {name: cis_division, type: TEXT}
+      - {name: mailing_prem_id, type: TEXT}
+      - {name: protect_prem_sw, type: TEXT}
+      - {name: coll_cl_cd, type: TEXT}
+      - {name: cr_review_dt, type: TEXT}
+      - {name: postpone_cr_rvw_dt, type: TEXT}
+      - {name: int_cr_review_sw, type: TEXT}
+      - {name: cust_cl_cd, type: TEXT}
+      - {name: bill_prt_intercept, type: TEXT}
+      - {name: no_dep_rvw_sw, type: TEXT}
+      - {name: version, type: INTEGER}
 consumption:
   table: csp_dim_account
   contract_change: false
