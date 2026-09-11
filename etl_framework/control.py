@@ -9,8 +9,11 @@ class ControlService:
         with self.connection() as conn:
             conn.executescript("""
             CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, environment TEXT, started_at TEXT, ended_at TEXT, status TEXT, error TEXT);
-            CREATE TABLE IF NOT EXISTS processors (run_id TEXT, processor TEXT, status TEXT, started_at TEXT, ended_at TEXT, error TEXT);
+            CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT);
             CREATE TABLE IF NOT EXISTS row_counts (run_id TEXT, processor TEXT, layer TEXT, table_name TEXT, inserted INTEGER, rejected INTEGER);
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(file_manifests)")}
+            if "checksum" not in columns:
+                conn.execute("ALTER TABLE file_manifests ADD COLUMN checksum TEXT")
             CREATE TABLE IF NOT EXISTS watermarks (source_table TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT, checksum TEXT);
             """)
@@ -36,9 +39,10 @@ class ControlService:
             return row[0] if row else None
 
     def set_watermark(self, table: str, value: str):
-        with self.connection() as c:
+    def record_manifest(self, path: str, size: int, modified: float, run_id: str, processed_at: str, checksum: str | None = None):
+        """Record a processed file; checksum remains optional for old callers."""
             c.execute("INSERT OR REPLACE INTO watermarks VALUES (?,?)", (table, value))
-
+            c.execute("INSERT OR REPLACE INTO file_manifests (path, size, modified, processed_at, run_id, checksum) VALUES (?,?,?,?,?,?)",
     def manifest(self, path: str, size: int, modified: float, checksum: str | None = None) -> bool:
         """Return whether a file is eligible; do not mark it processed yet."""
         with self.connection() as c:
