@@ -89,3 +89,14 @@ def test_ci_acct_schema_mismatch_fails_before_processing(tmp_path: Path):
     db = sqlite3.connect(context.raw_db)
     assert db.execute("select count(*) from sqlite_master where name='land_cust_ci_acct'").fetchone()[0] == 1
     db.close()
+
+
+def test_ci_acct_preserves_leading_zero_acct_id_and_opaque_version():
+    from etl_framework.ci_acct import COLUMNS, _clean, _version_order
+
+    row = {column: "" for column in COLUMNS}
+    row.update(acct_id="000123", version="0010")
+    cleaned = _clean(row, "M/d/yyyy")
+    assert cleaned["acct_id"] == "000123"
+    assert cleaned["version"] == "0010"
+    assert _version_order("0010") == (1, "0010")
