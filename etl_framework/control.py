@@ -11,7 +11,7 @@ class ControlService:
             CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, environment TEXT, started_at TEXT, ended_at TEXT, status TEXT, error TEXT);
             CREATE TABLE IF NOT EXISTS processors (run_id TEXT, processor TEXT, status TEXT, started_at TEXT, ended_at TEXT, error TEXT);
             CREATE TABLE IF NOT EXISTS row_counts (run_id TEXT, processor TEXT, layer TEXT, table_name TEXT, inserted INTEGER, rejected INTEGER);
-            CREATE TABLE IF NOT EXISTS watermarks (source_table TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS watermarks (source_table TEXT NOT NULL, key TEXT NOT NULL, value TEXT, PRIMARY KEY (source_table, key));
             CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT);
             """)
 
@@ -30,14 +30,20 @@ class ControlService:
         with self.connection() as c:
             c.execute("INSERT INTO row_counts VALUES (?,?,?,?,?,?)", (run_id, processor, layer, table, inserted, rejected))
 
-    def watermark(self, table: str) -> str | None:
+    def watermark_for_key(self, source_table: str, key: str) -> str | None:
         with self.connection() as c:
-            row = c.execute("SELECT value FROM watermarks WHERE source_table=?", (table,)).fetchone()
+            row = c.execute(
+                "SELECT value FROM watermarks WHERE source_table=? AND key=?",
+                (source_table, str(key)),
+            ).fetchone()
             return row[0] if row else None
 
-    def set_watermark(self, table: str, value: str):
+    def set_watermark_for_key(self, source_table: str, key: str, value: str):
         with self.connection() as c:
-            c.execute("INSERT OR REPLACE INTO watermarks VALUES (?,?)", (table, value))
+            c.execute(
+                "INSERT OR REPLACE INTO watermarks (source_table, key, value) VALUES (?, ?, ?)",
+                (source_table, str(key), str(value)),
+            )
 
     def manifest(self, path: str, size: int, modified: float, run_id: str, processed_at: str) -> bool:
         with self.connection() as c:
