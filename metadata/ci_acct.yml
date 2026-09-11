@@ -1,0 +1,30 @@
+landing:
+  pattern: "*.csv"
+  raw_table: land_cust_ci_acct
+raw:
+  database: raw.sqlite
+persistent:
+  - name: ci_acct
+    source_table: raw_cust_ci_acct
+    target_table: per_cust_ci_acct
+    keys: [acct_id]
+    columns:
+      - {name: acct_id, type: TEXT, nullable: false}
+      - {name: bill_cyc_cd, type: TEXT}
+      - {name: setup_dt, type: TEXT}
+      - {name: currency_cd, type: TEXT}
+      - {name: acct_mgmt_grp, type: TEXT}
+      - {name: bill_after_dt, type: TEXT}
+      - {name: protect_cyc_sw, type: TEXT}
+      - {name: cis_division, type: TEXT}
+      - {name: mailing_prem_id, type: TEXT}
+      - {name: protect_prem_sw, type: TEXT}
+      - {name: coll_cl_cd, type: TEXT}
+      - {name: cr_review_dt, type: TEXT}
+      - {name: postpone_cr_rvw_dt, type: TEXT}
+      - {name: int_cr_review_sw, type: TEXT}
+      - {name: cust_cl_cd, type: TEXT}
+      - {name: bill_prt_intercept, type: TEXT}
+      - {name: no_dep_rvw_sw, type: TEXT}
+      - {name: version, type: INTEGER}
+consumption: []
