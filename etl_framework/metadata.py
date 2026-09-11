@@ -39,7 +39,10 @@ def load_metadata(path: str | Path) -> Metadata:
     with open(path, encoding="utf-8") as stream:
         data = yaml.safe_load(stream) or {}
     persistent = []
+    registered_columns = data.get("columns", [])
     for item in data.get("persistent", []):
+        item = dict(item)
+        item["columns"] = item.get("columns") or registered_columns
         columns = [Column(name=c["name"], source=c.get("source"),
                           data_type=c.get("type", "TEXT"), nullable=c.get("nullable", True),
                           default=c.get("default")) for c in item.get("columns", [])]
