@@ -1,11 +1,6 @@
-import csv
-import sqlite3
-import uuid
-from datetime import datetime, timezone
-from pathlib import Path
 from .context import RuntimeContext, utc_now
 from .control import ControlService
-from .landing import discover_csv, read_csv
+from .landing import discover_csv, read_csv, file_checksum
 from .metadata import Metadata, TableMapping
 from .sqlite import connect, create_table
 from .transforms import run_sql
@@ -30,14 +25,19 @@ class ETLRunner:
         conn = connect(self.context.raw_db)
         for path in files:
             rows = read_csv(path)
-            if not rows: continue
-            table = self.metadata.landing.get("raw_table", path.stem)
+            if not rows:
+                self.control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime,
+                                             self.context.run_id, utc_now(), file_checksum(path))
+                continue
+            table = self.metadata.raw.get("table", self.metadata.landing.get("raw_table", path.stem))
             columns = [(name, "TEXT", True) for name in rows[0]]
             create_table(conn, table, columns)
             for row in rows:
                 names, vals = zip(*row.items())
                 conn.execute(f'INSERT INTO "{table}" ({",".join(chr(34)+n+chr(34) for n in names)}) VALUES ({",".join("?" for _ in vals)})', vals)
             self.control.rows(self.context.run_id, "landing_to_raw", "raw", table, len(rows))
+            self.control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime,
+                                         self.context.run_id, utc_now(), file_checksum(path))
         conn.commit(); conn.close()
         self.control.processor(self.context.run_id, processor, "SUCCEEDED", started, utc_now())
 
@@ -71,9 +71,20 @@ class ETLRunner:
     def run(self):
         started = utc_now(); self.control.run(self.context.run_id, self.context.environment, "RUNNING", started)
         try:
-            self.landing_to_raw()
-            for mapping in self.metadata.persistent: self.raw_to_persistent(mapping)
-            for item in self.metadata.consumption: run_sql(item["sql"], self.context.persistent_db, self.context.consumption_db)
+            strategy = self.metadata.landing.get("processor", "generic")
+            if strategy != "generic":
+                from .ci_acct import run_ci_acct
+                processors = {"ci_acct": run_ci_acct}
+                if strategy not in processors:
+                    raise ValueError(f"Unsupported metadata processor strategy: {strategy}")
+                processors[strategy](self.context, self.control, self.metadata.landing.get("pattern", "*.csv"))
+            else:
+                self.landing_to_raw()
+                for mapping in self.metadata.persistent:
+                    self.raw_to_persistent(mapping)
+            for item in self.metadata.consumption:
+                if item.get("refresh", "sql") == "sql":
+                    run_sql(item["sql"], self.context.persistent_db, self.context.consumption_db)
             self.control.run(self.context.run_id, self.context.environment, "SUCCEEDED", started, utc_now())
         except Exception as exc:
             self.control.run(self.context.run_id, self.context.environment, "FAILED", started, utc_now(), str(exc)); raise
