@@ -14,7 +14,7 @@ def _clean(row, date_format):
     out = {c: (row.get(c) or "").strip() or None for c in COLUMNS}
     for c in DATES:
         if out[c] is not None: out[c] = datetime.strptime(out[c], formats[date_format]).date().isoformat()
-return out
+    return out
 
 
 def _version_order(value):
