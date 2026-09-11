@@ -36,7 +36,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
     raw = connect(context.raw_db)
     persistent = connect(context.persistent_db)
     landing_cols = [(c, "TEXT", True) for c in COLUMNS] + [(c, "TEXT", True) for c in ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]]
-    raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
+    raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False), ("_source_file_name", "TEXT", False)]
     create_table(raw, "land_cust_ci_acct", landing_cols)
     create_table(raw, "raw_cust_ci_acct", raw_cols)
     create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
@@ -67,17 +67,17 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 elif row["acct_id"] in seen:
                     status = "duplicate"
                 seen.add(row.get("acct_id"))
-                vals = [row[c] for c in COLUMNS] + [status]
+                vals = [row[c] for c in COLUMNS] + [status, path.name]
                 target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
                 raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join("?" for _ in vals) + ')', vals)
 
     # Deduplicate within each physical file first. DESC rowid makes the last
     # source row win for an equal (acct_id, version) key.
-    rows = raw.execute("SELECT rowid, * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version, rowid DESC").fetchall()
+    rows = raw.execute("SELECT rowid, * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version, _source_file_name, rowid DESC").fetchall()
     seen_keys = set()
     candidates = []
     for row in rows:
-        key = (row["acct_id"], row["version"])
+        key = (row["_source_file_name"], row["acct_id"], row["version"])
         if key not in seen_keys:
             candidates.append(row)
             seen_keys.add(key)
