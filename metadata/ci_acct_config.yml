@@ -1,0 +1,102 @@
+dataset:
+  name: CI_ACCT
+  source_system: SHAREPOINT
+  source_object: CI_ACCT
+  domain: customer
+  table_classification: dimension
+  load_method: file_incremental
+  schedule: "0 4 * * *"
+  business_key: [acct_id]
+  incremental_key: [acct_id, version]
+  scd_type: SCD1
+  layer_tables:
+    landing: land_cust_ci_acct
+    raw: raw_cust_ci_acct
+    persistent: per_cust_ci_acct
+    consumption: csp_dim_account
+
+source:
+  connection_type: sharepoint
+  host: epam-my.sharepoint.com
+  path: /personal/cavan_wu_epam_com/Documents/share/temp/bamboo_ai/source
+  authentication_reference: SHAREPOINT_CI_ACCT_CONNECTION
+  file_pattern: "*.csv"
+  expected_arrival_time: "04:00"
+  encoding: utf-8-sig
+  delimiter: ","
+  multiple_files_policy: process_all_unseen_files
+
+columns:
+  # Source names beyond acct_id/version are provisional until the source contract is approved.
+  - {name: acct_id, source: acct_id, landing: acct_id, raw: acct_id, persistent: acct_id, type: TEXT, nullable: false, sensitive_classification: internal, data_owner: customer-data}
+  - {name: version, source: version, landing: version, raw: version, persistent: version, type: INTEGER, nullable: false, sensitive_classification: internal, data_owner: customer-data}
+  - {name: source_column_03, source: source_column_03, landing: source_column_03, raw: source_column_03, persistent: source_column_03, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_04, source: source_column_04, landing: source_column_04, raw: source_column_04, persistent: source_column_04, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_05, source: source_column_05, landing: source_column_05, raw: source_column_05, persistent: source_column_05, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_06, source: source_column_06, landing: source_column_06, raw: source_column_06, persistent: source_column_06, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_07, source: source_column_07, landing: source_column_07, raw: source_column_07, persistent: source_column_07, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_08, source: source_column_08, landing: source_column_08, raw: source_column_08, persistent: source_column_08, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_09, source: source_column_09, landing: source_column_09, raw: source_column_09, persistent: source_column_09, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_10, source: source_column_10, landing: source_column_10, raw: source_column_10, persistent: source_column_10, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_11, source: source_column_11, landing: source_column_11, raw: source_column_11, persistent: source_column_11, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_12, source: source_column_12, landing: source_column_12, raw: source_column_12, persistent: source_column_12, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_13, source: source_column_13, landing: source_column_13, raw: source_column_13, persistent: source_column_13, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_14, source: source_column_14, landing: source_column_14, raw: source_column_14, persistent: source_column_14, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_15, source: source_column_15, landing: source_column_15, raw: source_column_15, persistent: source_column_15, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_16, source: source_column_16, landing: source_column_16, raw: source_column_16, persistent: source_column_16, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_17, source: source_column_17, landing: source_column_17, raw: source_column_17, persistent: source_column_17, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+  - {name: source_column_18, source: source_column_18, landing: source_column_18, raw: source_column_18, persistent: source_column_18, type: TEXT, nullable: true, sensitive_classification: pending, data_owner: pending}
+
+incremental:
+  strategy: composite_key
+  keys: [acct_id, version]
+  deduplication: "ROW_NUMBER() OVER (PARTITION BY acct_id, version ORDER BY source_file_modified_ts DESC, ingestion_ts DESC, source_row_number DESC) = 1"
+  persistent_current_key: [acct_id]
+  ordering_column: version
+  ordering_direction: DESC
+  late_arrival_policy: ignore_if_older
+  conflict_policy: quarantine_on_conflict
+  version_contract_status: pending_business_owner_confirmation
+
+scd:
+  type: SCD1
+  current_key: [acct_id]
+  source_version_column: version
+  update_condition: incoming.version > target.version
+  history_required: false
+  delete_behavior: none
+
+dq_rules:
+  - {rule_id: CI_ACCT_DQ_001, name: acct_id_not_null, expression: "acct_id IS NOT NULL", severity: error, action: reject_record, threshold: 0}
+  - {rule_id: CI_ACCT_DQ_002, name: valid_version, expression: "version IS NOT NULL AND version >= 0", severity: error, action: reject_record, threshold: 0}
+  - {rule_id: CI_ACCT_DQ_003, name: duplicate_composite_key, expression: "COUNT(*) OVER (PARTITION BY acct_id, version) = 1", severity: warning, action: deduplicate, threshold: 0}
+  - {rule_id: CI_ACCT_DQ_004, name: structural_csv, expression: "header and column count match registered contract", severity: error, action: reject_file, threshold: 0}
+
+lineage:
+  tables:
+    - {from: sharepoint.CI_ACCT, to: land_cust_ci_acct}
+    - {from: land_cust_ci_acct, to: raw_cust_ci_acct}
+    - {from: raw_cust_ci_acct, to: per_cust_ci_acct}
+    - {from: per_cust_ci_acct, to: csp_dim_account}
+  columns: "Each registered column maps source -> landing -> raw -> persistent -> consumption by the names above."
+
+landing:
+  pattern: "*.csv"
+  raw_table: raw_cust_ci_acct
+  table: land_cust_ci_acct
+  technical_columns: [ingestion_run_id, source_file_name, source_file_path, source_file_modified_ts, source_file_checksum, source_row_number, ingestion_ts, source_system, record_status]
+raw:
+  database: raw.sqlite
+persistent:
+  - name: ci_acct
+    source_table: raw_cust_ci_acct
+    target_table: per_cust_ci_acct
+    keys: [acct_id]
+    deduplicate_by: [acct_id, version]
+    watermark_column: version
+    watermark_type: INTEGER
+    dq_quarantine_table: raw_cust_ci_acct__quarantine
+    columns: []
+consumption:
+  - name: csp_dim_account
+    sql: "CREATE VIEW IF NOT EXISTS csp_dim_account AS SELECT * FROM source.per_cust_ci_acct;"
