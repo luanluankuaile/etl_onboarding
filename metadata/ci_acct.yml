@@ -6,10 +6,10 @@ source:
   connection_secret: SHAREPOINT_CI_ACCT_CONNECTION
   schedule: "0 4 * * *"
   load_mode: incremental
-  watermark: version
+  # File-manifest incremental processing is used; no watermark_column is provided.
 landing:
   table: land_cust_ci_acct
-  pattern: "*.csv"
+  pattern: ci_acct.csv
   immutable: true
   audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
 raw:
@@ -24,29 +24,33 @@ persistent:
     target_table: per_cust_ci_acct
     keys: [acct_id]
     deduplicate_by: [acct_id]
-    watermark_column: version
+    # Deliberately omitted: source watermark is not provided.
     columns:
       - {name: acct_id, type: TEXT, nullable: false}
       - {name: bill_cyc_cd, type: TEXT}
-      - {name: setup_dt, type: TEXT}
+      - {name: setup_dt, type: DATE}
       - {name: currency_cd, type: TEXT}
       - {name: acct_mgmt_grp, type: TEXT}
-      - {name: bill_after_dt, type: TEXT}
+      - {name: bill_after_dt, type: DATE}
       - {name: protect_cyc_sw, type: TEXT}
       - {name: cis_division, type: TEXT}
       - {name: mailing_prem_id, type: TEXT}
       - {name: protect_prem_sw, type: TEXT}
       - {name: coll_cl_cd, type: TEXT}
-      - {name: cr_review_dt, type: TEXT}
-      - {name: postpone_cr_rvw_dt, type: TEXT}
+      - {name: cr_review_dt, type: DATE}
+      - {name: postpone_cr_rvw_dt, type: DATE}
       - {name: int_cr_review_sw, type: TEXT}
       - {name: cust_cl_cd, type: TEXT}
       - {name: bill_prt_intercept, type: TEXT}
       - {name: no_dep_rvw_sw, type: TEXT}
       - {name: version, type: INTEGER}
 consumption:
-  table: csp_dim_account
-  contract_change: false
+  - name: csp_dim_account
+    target_table: csp_dim_account
+    sql: |
+      CREATE TABLE IF NOT EXISTS csp_dim_account AS
+      SELECT acct_id, currency_cd, acct_mgmt_grp, version
+      FROM source.per_cust_ci_acct;
 columns:
   - {name: acct_id, type: TEXT, nullable: false}
   - {name: bill_cyc_cd, type: TEXT}
