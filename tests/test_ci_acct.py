@@ -1,8 +1,8 @@
 import csv
+import pytest
 from pathlib import Path
 from etl_framework.ci_acct import run, BUSINESS
-from pathlib import Pat
-import pytest
+from etl_framework.ci_acct_pipeline import process_ci_acct, raw_select
 
 def row(acct, version, **kw):
     d={c:'' for c in BUSINESS}; d.update(acct_id=acct, version=str(version), **kw); return d
