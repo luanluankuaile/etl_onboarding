@@ -40,3 +40,80 @@ def _clean(row):
     if out["version"] < 0:
         raise ValueError("version must be non-negative")
     return out
+
+
+def run_ci_acct(context, control, pattern="*.csv"):
+    files = discover_csv(context, control, pattern)
+    raw = connect(context.raw_db)
+    persistent = connect(context.persistent_db)
+    landing_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS + AUDIT_COLUMNS]
+    raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS]
+    raw_cols += [("row_status", "TEXT", False)] + [(c, "TEXT", False) for c in AUDIT_COLUMNS]
+    create_table(raw, "land_cust_ci_acct", landing_cols)
+    create_table(raw, "raw_cust_ci_acct", raw_cols)
+    create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
+    audit = [("run_id", "TEXT", False), ("environment", "TEXT", False),
+             ("latest_update_datetime", "TEXT", False), ("latest_insert_datetime", "TEXT", False),
+             ("_record_hash", "TEXT", False)]
+    create_table(persistent, "per_cust_ci_acct",
+                 [(c, "INTEGER" if c == "version" else "TEXT", c == "acct_id") for c in COLUMNS] + audit,
+                 ["acct_id"])
+
+    for path in files:
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        ingestion_timestamp = utc_now()
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames != COLUMNS:
+                raise ValueError(f"CI_ACCT header mismatch in {path.name}: expected {COLUMNS}, got {reader.fieldnames}")
+            for source in reader:
+                if None in source:
+                    raise ValueError(f"CI_ACCT row has more fields than the declared header in {path.name}")
+                metadata = [path.name, str(path), ingestion_timestamp, context.run_id, checksum]
+                raw.execute('INSERT INTO "land_cust_ci_acct" VALUES (' + ','.join('?' for _ in (COLUMNS + AUDIT_COLUMNS)) + ')',
+                            [source.get(c) for c in COLUMNS] + metadata)
+                status = "valid"
+                try:
+                    row = _clean(source)
+                except (TypeError, ValueError):
+                    row = {c: None for c in COLUMNS}
+                    status = "invalid"
+                if not row.get("acct_id"):
+                    status = "invalid"
+                values = [row[c] for c in COLUMNS] + [status] + metadata
+                target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
+                raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join('?' for _ in values) + ')', values)
+
+    rows = raw.execute("SELECT rowid, * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version, _ingestion_timestamp ASC, rowid ASC").fetchall()
+    seen_keys = set()
+    candidates = []
+    for row in rows:
+        key = (row["_ingestion_timestamp"], row["acct_id"], row["version"])
+        if key not in seen_keys:
+            candidates.append(row)
+            seen_keys.add(key)
+
+    winners = {}
+    for row in sorted(candidates, key=lambda item: (item["_ingestion_timestamp"], item["rowid"])):
+        account = row["acct_id"]
+        if account not in winners or row["version"] > winners[account]["version"]:
+            winners[account] = row
+
+    for row in winners.values():
+        payload = [row[c] for c in COLUMNS]
+        record_hash = hashlib.sha256("|".join("" if value is None else str(value) for value in payload).encode()).hexdigest()
+        existing = persistent.execute("SELECT version FROM per_cust_ci_acct WHERE acct_id = ?", (row["acct_id"],)).fetchone()
+        if existing is not None and row["version"] <= existing["version"]:
+            continue
+        stamp = utc_now()
+        if existing is None:
+            values = payload + [context.run_id, context.environment, stamp, stamp, record_hash]
+            persistent.execute('INSERT INTO per_cust_ci_acct VALUES (' + ','.join('?' for _ in values) + ')', values)
+        else:
+            assignments = ", ".join(f'"{column}" = ?' for column in COLUMNS[1:])
+            persistent.execute(f'UPDATE per_cust_ci_acct SET {assignments}, environment = ?, latest_update_datetime = ?, _record_hash = ? WHERE acct_id = ?', payload[1:] + [context.environment, stamp, record_hash, row["acct_id"]])
+    raw.commit()
+    persistent.commit()
+    raw.close()
+    persistent.close()
+    control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(winners), 0)
