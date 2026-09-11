@@ -12,9 +12,17 @@ from .transforms import run_sql
 
 
 def cast(value, data_type):
-    if value in (None, ""): return None
-    if data_type.upper().startswith("INT"): return int(value)
-    if data_type.upper().startswith(("REAL", "FLOAT", "DECIMAL")): return float(value)
+    """Cast a source value and validate the small SQLite type vocabulary."""
+    if value in (None, ""):
+        return None
+    kind = data_type.upper()
+    if kind.startswith("INT"):
+        return int(value)
+    if kind.startswith(("REAL", "FLOAT", "DECIMAL")):
+        return float(value)
+    if kind == "DATE":
+        datetime.fromisoformat(value)
+        return value
     return value
 
 
@@ -30,9 +38,15 @@ class ETLRunner:
         conn = connect(self.context.raw_db)
         for path in files:
             rows = read_csv(path)
-            if not rows: continue
+            if not rows:
+                continue
             table = self.metadata.landing.get("raw_table", path.stem)
-            columns = [(name, "TEXT", True) for name in rows[0]]
+            expected = [c.source or c.name for mapping in self.metadata.persistent
+                        if mapping.source_table == table for c in mapping.columns]
+            actual = list(rows[0])
+            if expected and actual != expected:
+                raise ValueError(f"{path.name}: expected columns {expected}, got {actual}")
+            columns = [(name, "TEXT", True) for name in actual]
             create_table(conn, table, columns)
             for row in rows:
                 names, vals = zip(*row.items())
@@ -51,11 +65,22 @@ class ETLRunner:
         create_table(persistent, quarantine, [(c.name, c.data_type, True) for c in mapping.columns] + audit)
         rows = raw.execute(f'SELECT * FROM "{mapping.source_table}"').fetchall()
         seen = set(); inserted = rejected = 0
+        watermark = self.control.watermark(mapping.source_table)
+        max_watermark = watermark
         for source_row in rows:
-            values = [cast(source_row[c.source or c.name], c.data_type) for c in mapping.columns]
-            invalid = any(v is None and not c.nullable for v, c in zip(values, mapping.columns))
+            try:
+                values = [cast(source_row[c.source or c.name], c.data_type) for c in mapping.columns]
+                invalid = any(v is None and not c.nullable for v, c in zip(values, mapping.columns))
+            except (TypeError, ValueError):
+                values = [source_row[c.source or c.name] for c in mapping.columns]
+                invalid = True
+            current = source_row[mapping.watermark_column] if mapping.watermark_column else None
+            if watermark is not None and current is not None and current <= watermark:
+                continue
             if invalid: target, rejected = quarantine, rejected + 1
             else: target, inserted = mapping.target_table, inserted + 1
+            if current is not None and (max_watermark is None or current > max_watermark):
+                max_watermark = current
             now = utc_now(); values += [self.context.run_id, self.context.environment, now, now]
             if mapping.deduplicate_by:
                 dedup = tuple(source_row[k] for k in mapping.deduplicate_by)
@@ -64,7 +89,10 @@ class ETLRunner:
             cols = [c.name for c in mapping.columns] + [a[0] for a in audit]
             sql = f'INSERT OR REPLACE INTO "{target}" ({",".join(chr(34)+c+chr(34) for c in cols)}) VALUES ({",".join("?" for _ in cols)})'
             persistent.execute(sql, values)
-        persistent.commit(); raw.close(); persistent.close()
+        persistent.commit()
+        if mapping.watermark_column and max_watermark is not None:
+            self.control.set_watermark(mapping.source_table, max_watermark)
+        raw.close(); persistent.close()
         self.control.rows(self.context.run_id, processor, "persistent", mapping.target_table, inserted, rejected)
         self.control.processor(self.context.run_id, processor, "SUCCEEDED", started, utc_now())
 
