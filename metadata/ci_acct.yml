@@ -13,9 +13,11 @@ landing:
   pattern: "*.csv"
   immutable: true
   audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
-raw:
+- File delimiter and date format require source-owner confirmation. The local processor reads `ci_acct_date_format` from runtime context; `M/d/yyyy` is fixture-only.
+- `version` remains a source STRING in Landing, Raw, and Persistent. Numeric-looking values are used only for deterministic ordering and are never stored as integers; invalid values are quarantined.
   table: raw_cust_ci_acct
   row_status_values: [valid, invalid, duplicate]
+  # Fixture-only format; source-owner confirmation is required before production.
   date_format: "M/d/yyyy"
   preserve_string_columns: [acct_id]
   dq_quarantine_table: raw_cust_ci_acct__quarantine
@@ -49,7 +51,7 @@ consumption:
   - name: csp_dim_account
     target_table: csp_dim_account
     sql: |
-      CREATE TABLE IF NOT EXISTS csp_dim_account AS
+      - {name: version, type: TEXT}
       SELECT acct_id, currency_cd, acct_mgmt_grp, version
       FROM source.per_cust_ci_acct;
       - {name: version, type: TEXT}
@@ -78,6 +80,6 @@ quality:
   - {name: version, type: TEXT}
   source: SharePoint:/Documents/share/temp/bamboo_ai/source/*.csv
   landing: land_cust_ci_acct
-  raw: raw_cust_ci_acct
+  - {name: date_format, expression: "all populated dates parse using configured raw.date_format", action: reject}
   persistent: per_cust_ci_acct
   consumption: csp_dim_account
