@@ -32,6 +32,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
     audit = [("run_id", "TEXT", False), ("environment", "TEXT", False), ("latest_update_datetime", "TEXT", False), ("latest_insert_datetime", "TEXT", False), ("_record_hash", "TEXT", False)]
     create_table(persistent, "per_cust_ci_acct", [(c, "INTEGER" if c == "version" else "TEXT", c == "acct_id") for c in COLUMNS] + audit, ["acct_id"])
     seen = set()
+    rejected = 0
     for path in files:
         checksum = hashlib.sha256(path.read_bytes()).hexdigest(); now = utc_now()
         with path.open(newline="", encoding="utf-8-sig") as handle:
@@ -46,9 +47,13 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 status = "valid"
                 try: row = _clean(source)
                 except (TypeError, ValueError): row, status = _clean({c: None for c in COLUMNS}), "invalid"
-                if not row.get("acct_id"): status = "invalid"
-                if row.get("acct_id") in seen: status = "duplicate"
-                seen.add(row.get("acct_id"))
+                if not row.get("acct_id"):
+                    status = "invalid"
+                    rejected += 1
+                elif row.get("acct_id") in seen:
+                    status = "duplicate"
+                else:
+                    seen.add(row.get("acct_id"))
                 vals = [row[c] for c in COLUMNS] + [status]
                 target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
                 raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join('?' for _ in vals) + ')', vals)
@@ -66,4 +71,4 @@ def run_ci_acct(context, control, pattern="*.csv"):
         checksum = hashlib.sha256(path.read_bytes()).hexdigest()
         control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime,
                                 context.run_id, utc_now(), checksum)
-    control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(winners), 0)
+    control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(winners), rejected)
