@@ -33,13 +33,21 @@ class Metadata:
     raw: dict[str, Any]
     persistent: list[TableMapping]
     consumption: list[dict[str, Any]]
+    quality: list[dict[str, Any]] = field(default_factory=list)
 
 
 def load_metadata(path: str | Path) -> Metadata:
     with open(path, encoding="utf-8") as stream:
         data = yaml.safe_load(stream) or {}
     persistent = []
-    for item in data.get("persistent", []):
+    persistent_config = data.get("persistent", [])
+    if isinstance(persistent_config, dict):
+        item = dict(persistent_config)
+        item.setdefault("name", item.get("table"))
+        item.setdefault("source_table", data.get("raw", {}).get("table"))
+        item.setdefault("target_table", item.get("table"))
+        persistent_config = [item]
+    for item in persistent_config:
         columns = [Column(name=c["name"], source=c.get("source"),
                           data_type=c.get("type", "TEXT"), nullable=c.get("nullable", True),
                           default=c.get("default")) for c in item.get("columns", [])]
@@ -50,4 +58,5 @@ def load_metadata(path: str | Path) -> Metadata:
             columns=columns, keys=item.get("keys", []), deduplicate_by=item.get("deduplicate_by", []),
             watermark_column=item.get("watermark_column"), watermark_type=item.get("watermark_type", "TEXT"),
             dq_quarantine_table=item.get("dq_quarantine_table")))
-    return Metadata(data.get("landing", {}), data.get("raw", {}), persistent, data.get("consumption", []))
+    return Metadata(data.get("landing", {}), data.get("raw", {}), persistent,
+                    data.get("consumption", []), data.get("quality", {}).get("rules", []))
