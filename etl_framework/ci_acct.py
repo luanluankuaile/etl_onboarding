@@ -24,7 +24,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
     files = sorted(context.landing_dir.glob(pattern))
     raw = connect(context.raw_db); persistent = connect(context.persistent_db)
     landing_cols = [(c, "TEXT", True) for c in COLUMNS] + [(c, "TEXT", True) for c in ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]]
-    raw_cols = [(c, "INTEGER", False if c == "version" else True) for c in COLUMNS] + [("row_status", "TEXT", False)]
+    raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
     create_table(raw, "land_cust_ci_acct", landing_cols)
     create_table(raw, "raw_cust_ci_acct", raw_cols)
     create_table(raw, "raw_cust_ci_acct__quarantine", raw_cols)
@@ -44,10 +44,14 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 if row.get("acct_id") in seen: status = "duplicate"
                 seen.add(row.get("acct_id"))
                 vals = [row[c] for c in COLUMNS] + [status]
-                raw.execute('INSERT INTO "' + ("raw_cust_ci_acct" if status == "valid" else "raw_cust_ci_acct__quarantine") + '" VALUES (' + ','.join('?' for _ in vals) + ')', vals)
+                target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
+                raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join('?' for _ in vals) + ')', vals)
     # Highest version wins; INSERT OR REPLACE provides Type 1 overwrite semantics.
-    rows = raw.execute("SELECT * FROM raw_cust_ci_acct WHERE row_status='valid' ORDER BY acct_id, version").fetchall()
+    rows = raw.execute("SELECT * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version").fetchall()
+    winners = {}
     for r in rows:
+        if r['acct_id'] not in winners or (r['version'] or -1) >= (winners[r['acct_id']]['version'] or -1): winners[r['acct_id']] = r
+    for r in winners.values():
         payload = [r[c] for c in COLUMNS]; record_hash = hashlib.sha256("|".join("" if x is None else str(x) for x in payload).encode()).hexdigest()
         stamp = utc_now(); values = payload + [context.run_id, context.environment, stamp, stamp, record_hash]
         persistent.execute('INSERT OR REPLACE INTO per_cust_ci_acct VALUES (' + ','.join('?' for _ in values) + ')', values)
