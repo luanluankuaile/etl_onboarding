@@ -39,10 +39,12 @@ def load_metadata(path: str | Path) -> Metadata:
     with open(path, encoding="utf-8") as stream:
         data = yaml.safe_load(stream) or {}
     persistent = []
+    registered_columns = data.get("columns", [])
     for item in data.get("persistent", []):
+        configured_columns = item.get("columns") or registered_columns
         columns = [Column(name=c["name"], source=c.get("source"),
                           data_type=c.get("type", "TEXT"), nullable=c.get("nullable", True),
-                          default=c.get("default")) for c in item.get("columns", [])]
+                          default=c.get("default")) for c in configured_columns]
         if not columns:
             raise ValueError(f"Mapping {item.get('name')} has no columns")
         persistent.append(TableMapping(
