@@ -9,6 +9,7 @@ source:
   # File-manifest incremental processing is used; no watermark_column is provided.
 landing:
   table: land_cust_ci_acct
+  processor: ci_acct
   pattern: "*.csv"
   immutable: true
   audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
@@ -51,7 +52,7 @@ consumption:
       CREATE TABLE IF NOT EXISTS csp_dim_account AS
       SELECT acct_id, currency_cd, acct_mgmt_grp, version
       FROM source.per_cust_ci_acct;
-columns:
+      - {name: version, type: TEXT}
   - {name: acct_id, type: TEXT, nullable: false}
   - {name: bill_cyc_cd, type: TEXT}
   - {name: setup_dt, type: DATE}
@@ -74,7 +75,7 @@ quality:
   - {name: acct_id_not_null, expression: "acct_id IS NOT NULL AND TRIM(acct_id) <> ''", action: reject}
   - {name: acct_id_unique, expression: "one valid row per acct_id after version deduplication", action: reject_duplicate}
   - {name: date_format, expression: "all populated date columns parse as M/d/yyyy", action: reject}
-lineage:
+  - {name: version, type: TEXT}
   source: SharePoint:/Documents/share/temp/bamboo_ai/source/*.csv
   landing: land_cust_ci_acct
   raw: raw_cust_ci_acct
