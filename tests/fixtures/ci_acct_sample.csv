@@ -1,0 +1,6 @@
+acct_id,bill_cyc_cd,setup_dt,currency_cd,acct_mgmt_grp,bill_after_dt,protect_cyc_sw,cis_division,mailing_prem_id,protect_prem_sw,coll_cl_cd,cr_review_dt,postpone_cr_rvw_dt,int_cr_review_sw,cust_cl_cd,bill_prt_intercept,no_dep_rvw_sw,version
+00001,M,1/2/2024,USD,GRP1,1/5/2024,N,D1,1001,Y,A,2/1/2024,,Y,R,N,1
+00002,Q,2/3/2024,EUR,GRP2,2/7/2024,N,D2,1002,N,B,3/1/2024,,N,S,Y,2
+00003,A,3/4/2024,GBP,GRP1,3/8/2024,Y,D1,1003,Y,A,4/1/2024,4/15/2024,Y,R,N,1
+00003,A,3/4/2024,GBP,GRP1,3/8/2024,Y,D1,1003,Y,A,4/1/2024,4/15/2024,Y,R,Y,2
+00004,M,,USD,GRP3,,N,D3,1004,N,C,,,N,T,N,1
