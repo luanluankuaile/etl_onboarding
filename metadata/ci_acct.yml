@@ -1,0 +1,38 @@
+landing:
+  pattern: "*.csv"
+  raw_table: ci_acct
+raw:
+  database: raw.sqlite
+persistent:
+  - name: ci_acct
+    source_table: ci_acct
+    target_table: ci_acct
+    keys: [acct_id]
+    deduplicate_by: [acct_id, version]
+    watermark_column: version
+    watermark_type: TEXT
+    dq_quarantine_table: ci_acct__quarantine
+    columns:
+      - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
+      - {name: bill_cyc_cd, source: bill_cyc_cd, type: TEXT, nullable: true}
+      - {name: setup_dt, source: setup_dt, type: DATE, nullable: true}
+      - {name: currency_cd, source: currency_cd, type: TEXT, nullable: true}
+      - {name: acct_mgmt_grp, source: acct_mgmt_grp, type: TEXT, nullable: true}
+      - {name: bill_after_dt, source: bill_after_dt, type: DATE, nullable: true}
+      - {name: protect_cyc_sw, source: protect_cyc_sw, type: TEXT, nullable: true}
+      - {name: cis_division, source: cis_division, type: TEXT, nullable: true}
+      - {name: mailing_prem_id, source: mailing_prem_id, type: TEXT, nullable: true}
+      - {name: protect_prem_sw, source: protect_prem_sw, type: TEXT, nullable: true}
+      - {name: coll_cl_cd, source: coll_cl_cd, type: TEXT, nullable: true}
+      - {name: cr_review_dt, source: cr_review_dt, type: DATE, nullable: true}
+      - {name: postpone_cr_rvw_dt, source: postpone_cr_rvw_dt, type: DATE, nullable: true}
+      - {name: int_cr_review_sw, source: int_cr_review_sw, type: TEXT, nullable: true}
+      - {name: cust_cl_cd, source: cust_cl_cd, type: TEXT, nullable: true}
+      - {name: bill_prt_intercept, source: bill_prt_intercept, type: TEXT, nullable: true}
+      - {name: no_dep_rvw_sw, source: no_dep_rvw_sw, type: TEXT, nullable: true}
+      - {name: version, source: version, type: TEXT, nullable: false}
+consumption:
+  - name: csp_dim_account
+    sql: |
+      CREATE TABLE IF NOT EXISTS csp_dim_account AS
+      SELECT * FROM source.ci_acct;
