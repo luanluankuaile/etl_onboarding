@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from .context import utc_now
 from .sqlite import connect, create_table
+from .landing import discover_csv
 
 COLUMNS = ["acct_id", "bill_cyc_cd", "setup_dt", "currency_cd", "acct_mgmt_grp", "bill_after_dt", "protect_cyc_sw", "cis_division", "mailing_prem_id", "protect_prem_sw", "coll_cl_cd", "cr_review_dt", "postpone_cr_rvw_dt", "int_cr_review_sw", "cust_cl_cd", "bill_prt_intercept", "no_dep_rvw_sw", "version"]
 DATES = {"setup_dt", "bill_after_dt", "cr_review_dt", "postpone_cr_rvw_dt"}
@@ -21,7 +22,7 @@ def _clean(row):
     return out
 
 def run_ci_acct(context, control, pattern="*.csv"):
-    files = sorted(context.landing_dir.glob(pattern))
+    files = discover_csv(context, control, pattern)
     raw = connect(context.raw_db); persistent = connect(context.persistent_db)
     landing_cols = [(c, "TEXT", True) for c in COLUMNS] + [(c, "TEXT", True) for c in ["_source_file_name", "_source_file_path", "_ingestion_timestamp", "_ingestion_batch_id", "_source_file_checksum"]]
     raw_cols = [(c, "INTEGER" if c == "version" else "TEXT", True) for c in COLUMNS] + [("row_status", "TEXT", False)]
