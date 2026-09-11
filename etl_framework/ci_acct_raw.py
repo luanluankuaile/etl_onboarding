@@ -7,7 +7,10 @@ from hashlib import sha256
 def cast_version(value: str | int | None) -> int | None:
     if value in (None, ""):
         return None
-    return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def deduplicate(rows: Iterable[dict], key: tuple[str, str] = ("acct_id", "version")) -> list[dict]:
@@ -17,7 +20,11 @@ def deduplicate(rows: Iterable[dict], key: tuple[str, str] = ("acct_id", "versio
         row = dict(row)
         row["version"] = cast_version(row.get("version"))
         composite = tuple(row.get(k) for k in key)
-        sort_key = (row.get("source_file_modified_ts", ""), row.get("ingestion_ts", ""), int(row.get("source_row_number", 0)))
+        try:
+            row_number = int(row.get("source_row_number", 0))
+        except (TypeError, ValueError):
+            row_number = 0
+        sort_key = (row.get("source_file_modified_ts", ""), row.get("ingestion_ts", ""), row_number)
         if composite not in selected or sort_key > selected[composite]["_sort_key"]:
             row["_sort_key"] = sort_key
             selected[composite] = row
