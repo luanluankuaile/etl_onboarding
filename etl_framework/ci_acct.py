@@ -109,5 +109,5 @@ def run_ci_acct(context, control, pattern="*.csv"):
     persistent.close()
     for path in files:
         checksum = hashlib.sha256(path.read_bytes()).hexdigest()
-        control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime, context.run_id, utc_now(), checksum)
+        control.manifest(str(path), path.stat().st_size, path.stat().st_mtime, context.run_id, utc_now())
     control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(winners), 0)
