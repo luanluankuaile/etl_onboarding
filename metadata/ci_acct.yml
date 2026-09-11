@@ -1,9 +1,15 @@
 # EPMLDATAAI-94 CI_ACCT onboarding metadata.
 # attr_* names are the governed source contract; confirm approved headers before production.
+# NOTE: duplicate top-level keys removed — YAML silently drops earlier keys with the same name.
+entity: CI_ACCT
+domain: cust
+
 source:
   system: SharePoint
   # Deployment must resolve this environment reference before production registration.
   location: "${SHAREPOINT_LOCATION}"
+  type: sharepoint_csv
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
   file_pattern: "CI_ACCT_*.csv"
   encoding: utf-8-sig
   delimiter: ","
@@ -11,15 +17,24 @@ source:
   start_time: "04:00"
   timezone: UTC
   checksum: sha256
+
+schedule:
+  frequency: daily
+  hour: 4
+
 landing:
   table: land_cust_ci_acct
   raw_table: raw_cust_ci_acct
   file_pattern: "CI_ACCT_*.csv"
+  preserve_source: true
+  checksum_skip: true
+  required_columns: [acct_id, version]
   validation:
     exact_column_count: 18
     required_columns: [acct_id, version]
     reject_unknown_columns: true
     quarantine: land_cust_ci_acct__quarantine
+
 raw:
   table: raw_cust_ci_acct
   mode: C
@@ -28,12 +43,19 @@ raw:
   watermark: {strategy: per_account, account_column: acct_id, version_column: version}
   deduplicate_by: [acct_id, version]
   record_hash_columns: all
+  keys: [acct_id]
+  version_column: version
+  standardize: [trim_whitespace, cast_version_integer]
+  select_latest_per_key: true
+
 persistent:
   table: per_cust_ci_acct
   type: SCD1
+  strategy: SCD1
   keys: [acct_id]
   update_when: "incoming.version > current.version"
   conflict_policy: quarantine
+  current_state_only: true
   columns:
     - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
     - {name: version, source: version, type: INTEGER, nullable: false}
@@ -53,17 +75,29 @@ persistent:
     - {name: attr_14, source: attr_14, type: TEXT, nullable: true}
     - {name: attr_15, source: attr_15, type: TEXT, nullable: true}
     - {name: attr_16, source: attr_16, type: TEXT, nullable: true}
+
 quality:
   rules:
     - {id: CI_ACCT_ACCT_ID_NOT_NULL, column: acct_id, check: not_null, action: quarantine}
     - {id: CI_ACCT_VERSION_NOT_NULL, column: version, check: not_null, action: quarantine}
     - {id: CI_ACCT_VERSION_VALID_INTEGER, column: version, check: is_integer, action: quarantine}
     - {id: CI_ACCT_VERSION_NON_NEGATIVE, column: version, check: non_negative, action: quarantine}
+  additional:
+    - name: acct_id_not_null
+      column: acct_id
+      rule: NOT_NULL
+      action: quarantine
+
 lineage:
   - {from: SharePoint.CI_ACCT, to: land_cust_ci_acct}
   - {from: land_cust_ci_acct, to: raw_cust_ci_acct}
   - {from: raw_cust_ci_acct, to: per_cust_ci_acct}
   - {from: per_cust_ci_acct, to: csp_dim_account}
+  source_path: /Documents/share/temp/bamboo_ai/source/*.csv
+  landing_table: land_cust_ci_acct
+  raw_table: raw_cust_ci_acct
+  persistent_table: per_cust_ci_acct
+
 consumption:
   table: csp_dim_account
   source_table: per_cust_ci_acct
@@ -74,44 +108,11 @@ consumption:
            effective_from, effective_to, is_current, status,
            created_ts, updated_ts, created_run_id, updated_run_id
     FROM per_cust_ci_acct
-entity: CI_ACCT
-domain: cust
-schedule:
-  frequency: daily
-  hour: 4
-source:
-  type: sharepoint_csv
-  path: /Documents/share/temp/bamboo_ai/source/*.csv
-  encoding: utf-8-sig
-landing:
-  table: land_cust_ci_acct
-  preserve_source: true
-  checksum_skip: true
-  required_columns: [acct_id, version]
-raw:
-  table: raw_cust_ci_acct
-  keys: [acct_id]
-  version_column: version
-  standardize: [trim_whitespace, cast_version_integer]
-  select_latest_per_key: true
-persistent:
-  table: per_cust_ci_acct
-  strategy: SCD1
-  update_when: incoming.version > current.version
-  current_state_only: true
-quality:
-  - name: acct_id_not_null
-    column: acct_id
-    rule: NOT_NULL
-    action: quarantine
+
 control:
   watermark: version
   advance_after: landing_raw_persistent_success
-lineage:
-  source: /Documents/share/temp/bamboo_ai/source/*.csv
-  landing: land_cust_ci_acct
-  raw: raw_cust_ci_acct
-  persistent: per_cust_ci_acct
+
 governance:
   approval_required: true
   data_owner_review_required: true
