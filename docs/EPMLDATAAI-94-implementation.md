@@ -9,7 +9,7 @@
 
 ## Controls and assumptions
 - No credentials are stored in this repository; the runtime resolves `SHAREPOINT_CI_ACCT_CONNECTION`.
-- `version` is the provisional incremental watermark and duplicate tie-breaker; confirm with the source owner.
+- `version` is used only as the provisional duplicate winner ordering; it is not configured or advanced as a source watermark. Confirm version and watermark semantics with the source owner before production use.
 - Landing is append-only by checksum/batch and retains source values plus audit metadata.
 - Invalid rows are quarantined; valid rows are deduplicated by highest version before the Type 1 merge.
 - `csp_dim_account` is not changed by this onboarding.
