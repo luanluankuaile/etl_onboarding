@@ -22,8 +22,10 @@ def validate_file(path: Path, expected_columns: list[str], encoding: str = "utf-
                 raise ValueError(f"header mismatch: expected {expected_columns}, got {reader.fieldnames}")
             rows = []
             for row in reader:
-                if None in row:
-                    raise ValueError(f"malformed row in {path}")
+                # DictReader uses None for missing fields and a None key for
+                # extra fields. Reject both rather than silently truncating.
+                if None in row or any(row.get(column) is None for column in expected_columns):
+                    raise ValueError(f"row schema mismatch in {path}")
                 rows.append(row)
     except (UnicodeDecodeError, csv.Error) as exc:
         raise ValueError(f"malformed CI_ACCT CSV: {path}") from exc
