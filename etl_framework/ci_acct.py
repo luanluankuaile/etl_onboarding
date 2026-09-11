@@ -14,11 +14,12 @@ def _clean(row, date_format):
     out = {c: (row.get(c) or "").strip() or None for c in COLUMNS}
     for c in DATES:
         if out[c] is not None: out[c] = datetime.strptime(out[c], formats[date_format]).date().isoformat()
-    if out["version"] is not None: int(out["version"])
-    return out
+return out
+
 
 def _version_order(value):
-    return (0, 0, "") if value is None else (1, int(value), value)
+    """Return deterministic ordering without interpreting version numerically."""
+    return (0, "") if value is None else (1, str(value))
 
 def run_ci_acct(context, control, pattern="*.csv"):
     files = discover_csv(context, control, pattern); raw = connect(context.raw_db); persistent = connect(context.persistent_db)
