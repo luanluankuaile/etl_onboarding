@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from pathlib import Path
 from .control import ControlService
 from .context import RuntimeContext, utc_now
@@ -7,7 +8,8 @@ from .context import RuntimeContext, utc_now
 def discover_csv(context: RuntimeContext, control: ControlService, pattern: str = "*.csv") -> list[Path]:
     files = []
     for path in sorted(context.landing_dir.glob(pattern)):
-        if control.manifest(str(path), path.stat().st_size, path.stat().st_mtime, context.run_id, utc_now()):
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        if control.manifest(str(path), path.stat().st_size, path.stat().st_mtime, checksum, context.run_id, utc_now()):
             files.append(path)
     return files
 

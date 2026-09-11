@@ -12,7 +12,8 @@ class ControlService:
             CREATE TABLE IF NOT EXISTS processors (run_id TEXT, processor TEXT, status TEXT, started_at TEXT, ended_at TEXT, error TEXT);
             CREATE TABLE IF NOT EXISTS row_counts (run_id TEXT, processor TEXT, layer TEXT, table_name TEXT, inserted INTEGER, rejected INTEGER);
             CREATE TABLE IF NOT EXISTS watermarks (source_table TEXT PRIMARY KEY, value TEXT);
-            CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, processed_at TEXT, run_id TEXT);
+            CREATE TABLE IF NOT EXISTS file_manifests (path TEXT PRIMARY KEY, size INTEGER, modified REAL, checksum TEXT, processed_at TEXT, run_id TEXT);
+            CREATE TABLE IF NOT EXISTS processed_file_ledger (checksum TEXT PRIMARY KEY, path TEXT, processed_at TEXT, run_id TEXT);
             """)
 
     def connection(self):
@@ -39,8 +40,17 @@ class ControlService:
         with self.connection() as c:
             c.execute("INSERT OR REPLACE INTO watermarks VALUES (?,?)", (table, value))
 
-    def manifest(self, path: str, size: int, modified: float, run_id: str, processed_at: str) -> bool:
+    def manifest(self, path: str, size: int, modified: float, checksum: str, run_id: str, processed_at: str) -> bool:
         with self.connection() as c:
-            if c.execute("SELECT 1 FROM file_manifests WHERE path=?", (path,)).fetchone(): return False
-            c.execute("INSERT INTO file_manifests VALUES (?,?,?,?,?)", (path, size, modified, processed_at, run_id))
+            existing = c.execute("SELECT size, modified, checksum FROM file_manifests WHERE path=?", (path,)).fetchone()
+            if existing and existing == (size, modified, checksum): return False
+            c.execute("INSERT OR REPLACE INTO file_manifests VALUES (?,?,?,?,?,?)", (path, size, modified, checksum, processed_at, run_id))
             return True
+
+    def processed_checksums(self, source_table: str = "CI_ACCT") -> set[str]:
+        with self.connection() as c:
+            return {r[0] for r in c.execute("SELECT checksum FROM processed_file_ledger WHERE path LIKE ?", (source_table + ":%",))}
+
+    def mark_file_processed(self, checksum: str, path: str, run_id: str, processed_at: str, source_table: str = "CI_ACCT") -> None:
+        with self.connection() as c:
+            c.execute("INSERT OR IGNORE INTO processed_file_ledger VALUES (?,?,?,?)", (checksum, source_table + ":" + path, processed_at, run_id))
