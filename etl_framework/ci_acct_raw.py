@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from collections import Counter
 from hashlib import sha256
+import json
 
 
 def cast_version(value: str | int | None) -> int | None:
@@ -22,11 +23,16 @@ def cast_version(value: str | int | None) -> int | None:
 
 def deduplicate(rows: Iterable[dict], key: tuple[str, str] = ("acct_id", "version"), audit: list[dict] | None = None) -> list[dict]:
     rows = list(rows)
-    counts = Counter(tuple(row.get(k) for k in key) for row in rows)
-    selected: dict[tuple, dict] = {}
+    normalized = []
     for original in rows:
         row = dict(original)
+        if row.get("acct_id") is not None:
+            row["acct_id"] = str(row["acct_id"]).strip()
         row["version"] = cast_version(row.get("version"))
+        normalized.append(row)
+    counts = Counter(tuple(row.get(k) for k in key) for row in normalized)
+    selected: dict[tuple, dict] = {}
+    for row in normalized:
         composite = tuple(row.get(k) for k in key)
         try:
             row_number = int(row.get("source_row_number", 0))
@@ -40,7 +46,8 @@ def deduplicate(rows: Iterable[dict], key: tuple[str, str] = ("acct_id", "versio
     for row in selected.values():
         row.pop("_sort_key", None)
         business = tuple("" if row.get(k) is None else str(row[k]).strip() for k in sorted(row) if not k.startswith("source_") and k not in {"ingestion_ts", "ingestion_run_id", "record_status"})
-        row["record_hash"] = sha256(repr(business).encode("utf-8")).hexdigest()
+        canonical = {k: "" if row.get(k) is None else str(row[k]).strip() for k in sorted(row) if not k.startswith("source_") and k not in {"ingestion_ts", "ingestion_run_id", "record_status", "record_hash"}}
+        row["record_hash"] = sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
         row["dq_status"] = "VALID" if row.get("acct_id") is not None and row.get("version") is not None and row["version"] >= 0 else "REJECTED"
         if counts[tuple(row.get(k) for k in key)] > 1 and audit is not None:
             audit.append({"rule_id": "CI_ACCT_DQ_003", "status": "WARN", "key": tuple(row.get(k) for k in key), "reason": "deterministic source metadata winner retained"})
