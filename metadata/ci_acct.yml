@@ -1,0 +1,45 @@
+# EPMLDATAAI-94: CI_ACCT onboarding metadata
+source:
+  system: SharePoint
+  site: epam-my.sharepoint.com/personal/cavan_wu_epam_com
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
+  connection_secret: SHAREPOINT_CI_ACCT_CONNECTION
+  schedule: "0 4 * * *"
+  load_mode: incremental
+landing:
+  table: land_cust_ci_acct
+  pattern: "*.csv"
+  immutable: true
+  audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
+raw:
+  table: raw_cust_ci_acct
+  row_status_values: [valid, invalid, duplicate]
+  date_format: "M/d/yyyy"
+  preserve_string_columns: [acct_id]
+  dq_quarantine_table: raw_cust_ci_acct__quarantine
+persistent:
+  - name: ci_acct
+    source_table: raw_cust_ci_acct
+    target_table: per_cust_ci_acct
+    keys: [acct_id]
+    deduplicate_by: [acct_id]
+    columns:
+      - {name: acct_id, type: TEXT, nullable: false}
+      - {name: bill_cyc_cd, type: TEXT}
+      - {name: setup_dt, type: DATE}
+      - {name: currency_cd, type: TEXT}
+      - {name: acct_mgmt_grp, type: TEXT}
+      - {name: bill_after_dt, type: DATE}
+      - {name: protect_cyc_sw, type: TEXT}
+      - {name: cis_division, type: TEXT}
+      - {name: mailing_prem_id, type: TEXT}
+      - {name: protect_prem_sw, type: TEXT}
+      - {name: coll_cl_cd, type: TEXT}
+      - {name: cr_review_dt, type: DATE}
+      - {name: postpone_cr_rvw_dt, type: DATE}
+      - {name: int_cr_review_sw, type: TEXT}
+      - {name: cust_cl_cd, type: TEXT}
+      - {name: bill_prt_intercept, type: TEXT}
+      - {name: no_dep_rvw_sw, type: TEXT}
+      - {name: version, type: INTEGER, nullable: false}
+consumption: []
