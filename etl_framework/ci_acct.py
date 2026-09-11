@@ -33,9 +33,17 @@ def run(raw_db, persistent_db, rows, batch):
     for _, d in best.values():
         vals=[d.get(c) for c in raw_cols]; raw.execute('INSERT OR REPLACE INTO raw_cust_ci_acct VALUES ('+','.join('?'*len(vals))+')',vals)
     for _, d in best.values():
-        current=out.execute('SELECT version FROM per_cust_ci_acct WHERE acct_id=?',(d['acct_id'],)).fetchone()
-        if current and int(d['version']) <= int(current[0]): continue
-        now=utc_now(); vals=[d.get(c) for c in BUSINESS]+['SharePoint.CI_ACCT',d.get('source_file_name'),d.get('ingestion_batch_id'),d.get('ingestion_ts'),now,now]
-        if current: out.execute('UPDATE per_cust_ci_acct SET '+','.join('"%s"=?'%c for c in BUSINESS[1:]+TECH)+' WHERE acct_id=?',vals[1:]+[d['acct_id']])
-        else: out.execute('INSERT INTO per_cust_ci_acct VALUES ('+','.join('?'*len(vals))+')',vals)
+        current = out.execute('SELECT version, persistent_insert_ts FROM per_cust_ci_acct WHERE acct_id=?', (d['acct_id'],)).fetchone()
+        if current and int(d['version']) <= int(current[0]):
+            continue
+        now = utc_now()
+        insert_ts = current[1] if current else now  # preserve original insert timestamp on updates
+        vals = [d.get(c) for c in BUSINESS] + ['SharePoint.CI_ACCT', d.get('source_file_name'), d.get('ingestion_batch_id'), d.get('ingestion_ts'), insert_ts, now]
+        if current:
+            # UPDATE: set all BUSINESS cols (including acct_id) and all TECH cols except persistent_insert_ts
+            update_cols = BUSINESS + [c for c in TECH if c != 'persistent_insert_ts']
+            update_vals = [d.get(c) for c in BUSINESS] + ['SharePoint.CI_ACCT', d.get('source_file_name'), d.get('ingestion_batch_id'), d.get('ingestion_ts'), now]
+            out.execute('UPDATE per_cust_ci_acct SET ' + ','.join('"%s"=?' % c for c in update_cols) + ' WHERE acct_id=?', update_vals + [d['acct_id']])
+        else:
+            out.execute('INSERT INTO per_cust_ci_acct VALUES (' + ','.join('?' * len(vals)) + ')', vals)
     raw.commit(); out.commit(); raw.close(); out.close()
