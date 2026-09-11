@@ -57,4 +57,8 @@ def run_ci_acct(context, control, pattern="*.csv"):
         stamp = utc_now(); values = payload + [context.run_id, context.environment, stamp, stamp, record_hash]
         persistent.execute('INSERT OR REPLACE INTO per_cust_ci_acct VALUES (' + ','.join('?' for _ in values) + ')', values)
     raw.commit(); persistent.commit(); raw.close(); persistent.close()
-    control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(rows), 0)
+    for path in files:
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        control.record_manifest(str(path), path.stat().st_size, path.stat().st_mtime,
+                                context.run_id, utc_now(), checksum)
+    control.rows(context.run_id, "ci_acct", "persistent", "per_cust_ci_acct", len(winners), 0)
