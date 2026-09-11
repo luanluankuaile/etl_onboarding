@@ -1,0 +1,41 @@
+entity: CI_ACCT
+domain: cust
+schedule:
+  frequency: daily
+  hour: 4
+source:
+  type: sharepoint_csv
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
+  encoding: utf-8-sig
+landing:
+  table: land_cust_ci_acct
+  preserve_source: true
+  checksum_skip: true
+  required_columns: [acct_id, version]
+raw:
+  table: raw_cust_ci_acct
+  keys: [acct_id]
+  version_column: version
+  standardize: [trim_whitespace, cast_version_integer]
+  select_latest_per_key: true
+persistent:
+  table: per_cust_ci_acct
+  strategy: SCD1
+  update_when: incoming.version > current.version
+  current_state_only: true
+quality:
+  - name: acct_id_not_null
+    column: acct_id
+    rule: NOT_NULL
+    action: quarantine
+control:
+  watermark: version
+  advance_after: landing_raw_persistent_success
+lineage:
+  source: /Documents/share/temp/bamboo_ai/source/*.csv
+  landing: land_cust_ci_acct
+  raw: raw_cust_ci_acct
+  persistent: per_cust_ci_acct
+governance:
+  approval_required: true
+  data_owner_review_required: true
