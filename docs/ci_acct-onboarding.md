@@ -17,5 +17,5 @@ The logical lineage is:
 - SCD behavior is unresolved. The local persistent processor currently uses the existing version-winner/overwrite convention and must not be treated as an approved production SCD policy.
 
 ## Quality and governance
-
+- SCD behavior is unresolved. `version` is preserved as opaque source TEXT and is not a watermark. The local processor uses only a deterministic lexical comparison of version text to choose a duplicate winner; this is an implementation tie-break, not a claim about source version ordering or recency, and must not be treated as an approved production SCD policy.
 All 18 columns are declared. `acct_id` is the key and not-null violations are quarantined. Human review is required for metadata, source-to-target mapping, data quality, security classification, lineage, runtime integration, and release approval before promotion.
