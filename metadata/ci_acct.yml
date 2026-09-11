@@ -1,0 +1,117 @@
+# EPMLDATAAI-94 CI_ACCT onboarding metadata.
+# attr_* names are the governed source contract; confirm approved headers before production.
+source:
+  system: SharePoint
+  # Deployment must resolve this environment reference before production registration.
+  location: "${SHAREPOINT_LOCATION}"
+  file_pattern: "CI_ACCT_*.csv"
+  encoding: utf-8-sig
+  delimiter: ","
+  load_frequency: daily
+  start_time: "04:00"
+  timezone: UTC
+  checksum: sha256
+landing:
+  table: land_cust_ci_acct
+  raw_table: raw_cust_ci_acct
+  file_pattern: "CI_ACCT_*.csv"
+  validation:
+    exact_column_count: 18
+    required_columns: [acct_id, version]
+    reject_unknown_columns: true
+    quarantine: land_cust_ci_acct__quarantine
+raw:
+  table: raw_cust_ci_acct
+  mode: C
+  lookback_days: 1
+  incremental_key: [acct_id, version]
+  watermark: {strategy: per_account, account_column: acct_id, version_column: version}
+  deduplicate_by: [acct_id, version]
+  record_hash_columns: all
+persistent:
+  table: per_cust_ci_acct
+  type: SCD1
+  keys: [acct_id]
+  update_when: "incoming.version > current.version"
+  conflict_policy: quarantine
+  columns:
+    - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
+    - {name: version, source: version, type: INTEGER, nullable: false}
+    - {name: attr_01, source: attr_01, type: TEXT, nullable: true}
+    - {name: attr_02, source: attr_02, type: TEXT, nullable: true}
+    - {name: attr_03, source: attr_03, type: TEXT, nullable: true}
+    - {name: attr_04, source: attr_04, type: TEXT, nullable: true}
+    - {name: attr_05, source: attr_05, type: TEXT, nullable: true}
+    - {name: attr_06, source: attr_06, type: TEXT, nullable: true}
+    - {name: attr_07, source: attr_07, type: TEXT, nullable: true}
+    - {name: attr_08, source: attr_08, type: TEXT, nullable: true}
+    - {name: attr_09, source: attr_09, type: TEXT, nullable: true}
+    - {name: attr_10, source: attr_10, type: TEXT, nullable: true}
+    - {name: attr_11, source: attr_11, type: TEXT, nullable: true}
+    - {name: attr_12, source: attr_12, type: TEXT, nullable: true}
+    - {name: attr_13, source: attr_13, type: TEXT, nullable: true}
+    - {name: attr_14, source: attr_14, type: TEXT, nullable: true}
+    - {name: attr_15, source: attr_15, type: TEXT, nullable: true}
+    - {name: attr_16, source: attr_16, type: TEXT, nullable: true}
+quality:
+  rules:
+    - {id: CI_ACCT_ACCT_ID_NOT_NULL, column: acct_id, check: not_null, action: quarantine}
+    - {id: CI_ACCT_VERSION_NOT_NULL, column: version, check: not_null, action: quarantine}
+    - {id: CI_ACCT_VERSION_VALID_INTEGER, column: version, check: is_integer, action: quarantine}
+    - {id: CI_ACCT_VERSION_NON_NEGATIVE, column: version, check: non_negative, action: quarantine}
+lineage:
+  - {from: SharePoint.CI_ACCT, to: land_cust_ci_acct}
+  - {from: land_cust_ci_acct, to: raw_cust_ci_acct}
+  - {from: raw_cust_ci_acct, to: per_cust_ci_acct}
+  - {from: per_cust_ci_acct, to: csp_dim_account}
+consumption:
+  table: csp_dim_account
+  source_table: per_cust_ci_acct
+  mapping: |
+    SELECT acct_id, version, attr_01, attr_02, attr_03, attr_04,
+           attr_05, attr_06, attr_07, attr_08, attr_09, attr_10,
+           attr_11, attr_12, attr_13, attr_14, attr_15, attr_16,
+           effective_from, effective_to, is_current, status,
+           created_ts, updated_ts, created_run_id, updated_run_id
+    FROM per_cust_ci_acct
+entity: CI_ACCT
+domain: cust
+schedule:
+  frequency: daily
+  hour: 4
+source:
+  type: sharepoint_csv
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
+  encoding: utf-8-sig
+landing:
+  table: land_cust_ci_acct
+  preserve_source: true
+  checksum_skip: true
+  required_columns: [acct_id, version]
+raw:
+  table: raw_cust_ci_acct
+  keys: [acct_id]
+  version_column: version
+  standardize: [trim_whitespace, cast_version_integer]
+  select_latest_per_key: true
+persistent:
+  table: per_cust_ci_acct
+  strategy: SCD1
+  update_when: incoming.version > current.version
+  current_state_only: true
+quality:
+  - name: acct_id_not_null
+    column: acct_id
+    rule: NOT_NULL
+    action: quarantine
+control:
+  watermark: version
+  advance_after: landing_raw_persistent_success
+lineage:
+  source: /Documents/share/temp/bamboo_ai/source/*.csv
+  landing: land_cust_ci_acct
+  raw: raw_cust_ci_acct
+  persistent: per_cust_ci_acct
+governance:
+  approval_required: true
+  data_owner_review_required: true
