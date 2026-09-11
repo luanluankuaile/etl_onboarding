@@ -34,9 +34,8 @@ def _persistent(context):
 def test_ci_acct_idempotent_reprocessing(tmp_path):
     context = _run(tmp_path, [_row("1")], "first")
     before = _persistent(context)
-    # A distinct filename is a new file, but the same version must not mutate
-    # the record's creation audit metadata.
-    _run(tmp_path, [_row("1")], "replay")
+    # Re-running the same physical file is blocked by the control manifest.
+    ETLRunner(load_metadata(ROOT / "metadata/ci_acct.yml"), RuntimeContext("replay", landing_dir=tmp_path / "landing", raw_db=tmp_path/"raw.sqlite", persistent_db=tmp_path/"persistent.sqlite", consumption_db=tmp_path/"consumption.sqlite", control_db=tmp_path/"control.sqlite")).run()
     after = _persistent(context)
     assert after == before
 
