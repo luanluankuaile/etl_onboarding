@@ -45,7 +45,6 @@ def deduplicate(rows: Iterable[dict], key: tuple[str, str] = ("acct_id", "versio
     result = []
     for row in selected.values():
         row.pop("_sort_key", None)
-        business = tuple("" if row.get(k) is None else str(row[k]).strip() for k in sorted(row) if not k.startswith("source_") and k not in {"ingestion_ts", "ingestion_run_id", "record_status"})
         canonical = {k: "" if row.get(k) is None else str(row[k]).strip() for k in sorted(row) if not k.startswith("source_") and k not in {"ingestion_ts", "ingestion_run_id", "record_status", "record_hash"}}
         row["record_hash"] = sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
         row["dq_status"] = "VALID" if row.get("acct_id") is not None and row.get("version") is not None and row["version"] >= 0 else "REJECTED"
