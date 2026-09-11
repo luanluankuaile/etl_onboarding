@@ -35,7 +35,12 @@ def run_ci_acct(context, control, pattern="*.csv"):
     for path in files:
         checksum = hashlib.sha256(path.read_bytes()).hexdigest(); now = utc_now()
         with path.open(newline="", encoding="utf-8-sig") as handle:
-            for source in csv.DictReader(handle):
+            reader = csv.DictReader(handle)
+            if reader.fieldnames != COLUMNS:
+                raise ValueError(f"CI_ACCT header mismatch in {path.name}: expected {COLUMNS}, got {reader.fieldnames}")
+            for source in reader:
+                if None in source:
+                    raise ValueError(f"CI_ACCT row has more fields than the declared header in {path.name}")
                 landing = [source.get(c) for c in COLUMNS] + [path.name, str(path), now, context.run_id, checksum]
                 raw.execute('INSERT INTO "land_cust_ci_acct" VALUES (' + ','.join('?' for _ in landing) + ')', landing)
                 status = "valid"
@@ -48,7 +53,7 @@ def run_ci_acct(context, control, pattern="*.csv"):
                 target = "raw_cust_ci_acct" if status in ("valid", "duplicate") else "raw_cust_ci_acct__quarantine"
                 raw.execute('INSERT INTO "' + target + '" VALUES (' + ','.join('?' for _ in vals) + ')', vals)
     # Highest version wins; INSERT OR REPLACE provides Type 1 overwrite semantics.
-    rows = raw.execute("SELECT * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version").fetchall()
+    rows = raw.execute("SELECT rowid, * FROM raw_cust_ci_acct WHERE row_status IN ('valid', 'duplicate') AND acct_id IS NOT NULL ORDER BY acct_id, version, rowid").fetchall()
     winners = {}
     for r in rows:
         if r['acct_id'] not in winners or (r['version'] or -1) >= (winners[r['acct_id']]['version'] or -1): winners[r['acct_id']] = r
