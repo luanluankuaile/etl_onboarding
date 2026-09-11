@@ -16,14 +16,20 @@ def test_ci_acct_first_file_wins_regardless_of_name(tmp_path):
     landing = tmp_path / "landing"
     landing.mkdir()
     fields = list(_row(1).keys())
-    for name, flag in (("file_z.csv", "N"), ("file_a.csv", "Y")):
+    metadata = load_metadata(ROOT / "metadata/ci_acct.yml")
+    context_args = dict(landing_dir=landing, raw_db=tmp_path / "raw.sqlite", persistent_db=tmp_path / "persistent.sqlite", consumption_db=tmp_path / "consumption.sqlite", control_db=tmp_path / "control.sqlite")
+
+    def write_file(name, flag):
         with (landing / name).open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)
             writer.writeheader()
             writer.writerow(_row(1, flag))
 
-    context = RuntimeContext("cross-file", landing_dir=landing, raw_db=tmp_path / "raw.sqlite", persistent_db=tmp_path / "persistent.sqlite", consumption_db=tmp_path / "consumption.sqlite", control_db=tmp_path / "control.sqlite")
-    metadata = load_metadata(ROOT / "metadata/ci_acct.yml")
+    # Process the lexically later file first, then the lexically earlier file.
+    write_file("file_z.csv", "N")
+    ETLRunner(metadata, RuntimeContext("first", **context_args)).run()
+    write_file("file_a.csv", "Y")
+    context = RuntimeContext("second", **context_args)
     ETLRunner(metadata, context).run()
 
     db = sqlite3.connect(context.persistent_db)
