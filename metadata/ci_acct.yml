@@ -9,7 +9,7 @@ source:
   # File-manifest incremental processing is used; no watermark_column is provided.
 landing:
   table: land_cust_ci_acct
-  pattern: ci_acct.csv
+  pattern: "*.csv"
   immutable: true
   audit_columns: [_source_file_name, _source_file_path, _ingestion_timestamp, _ingestion_batch_id, _source_file_checksum]
 raw:
