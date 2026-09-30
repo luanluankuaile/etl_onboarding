@@ -1,8 +1,10 @@
 import sqlite3
 from pathlib import Path
+import yaml
 from etl_framework.context import RuntimeContext
 from etl_framework.metadata import load_metadata
 from etl_framework.runner import ETLRunner
+from etl_framework.workflow_runner import LocalWorkflowRunner
 
 
 def test_end_to_end(tmp_path: Path):
@@ -20,6 +22,34 @@ def test_end_to_end(tmp_path: Path):
 def test_metadata_loader():
     metadata = load_metadata(Path(__file__).parents[1] / "metadata/demo.yml")
     assert metadata.persistent[0].keys == ["customer_id"]
+
+
+def test_workflow_runner_executes_only_requested_processor(tmp_path: Path):
+    workflow_path = tmp_path / "workflow.yml"
+    workflow_path.write_text(yaml.safe_dump({"data_processors": [
+        {"processor_name": "first", "notebook": "etl_framework.workflow_runner.load_workflow"},
+        {
+            "processor_name": "second",
+            "notebook": "etl_framework.workflow_runner.load_workflow",
+            "parameters": {"batch_size": 10},
+            "source_tables": ["raw.customers"],
+            "target_tables": ["persistent.customers"],
+        },
+    ]}), encoding="utf-8")
+    context = RuntimeContext("run-1")
+    runner = LocalWorkflowRunner(workflow_path, context)
+    executed = []
+    runner.registry._entry_points = {
+        "first": lambda _: executed.append("first"),
+        "second": lambda _: executed.append("second"),
+    }
+
+    runner.run("second")
+
+    assert executed == ["second"]
+    assert context.processor_parameters == {"processor_name": "second", "batch_size": 10}
+    assert context.source_metadata == {"tables": ["raw.customers"]}
+    assert context.target_metadata == {"tables": ["persistent.customers"]}
 
 
 def test_ci_acct_end_to_end(tmp_path: Path):

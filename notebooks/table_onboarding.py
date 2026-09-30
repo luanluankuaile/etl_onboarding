@@ -8,23 +8,14 @@ from etl_framework.context import RuntimeContext
 from etl_framework.metadata import load_metadata
 from etl_framework.workflow_runner import LocalWorkflowRunner
 
-# Install the etl_framework wheel or add its repository to the cluster before running.
-dbutils.widgets.text(
-    "workflow_path",
-    "/Workspace/Shared/etl_onboarding/metadata/workflows/customer_process_daily.yaml",
+workflow_path = Path(
+    "/Workspace/Shared/etl_onboarding/metadata/workflows/customer_daily.yml"
 )
-dbutils.widgets.text("landing_dir", "/Volumes/main/default/etl/landing")
-dbutils.widgets.text("storage_dir", "/Volumes/main/default/etl/state")
-dbutils.widgets.text("environment", "dev")
-dbutils.widgets.text("run_id", "")
-
-# COMMAND ----------
-
-workflow_path = Path(dbutils.widgets.get("workflow_path"))
-landing_dir = Path(dbutils.widgets.get("landing_dir"))
-storage_dir = Path(dbutils.widgets.get("storage_dir"))
-environment = dbutils.widgets.get("environment")
-run_id = dbutils.widgets.get("run_id") or str(uuid4())
+processor_name = "customer_customers_land_to_raw"
+landing_dir = Path("/Volumes/main/default/etl/landing")
+storage_dir = Path("/Volumes/main/default/etl/state")
+environment = "dev"
+run_id = str(uuid4())
 
 if not workflow_path.is_file():
     raise FileNotFoundError(f"Workflow metadata was not found: {workflow_path}")
@@ -41,8 +32,11 @@ context = RuntimeContext(
 )
 context.values["metadata"] = load_metadata(workflow_path)
 
-# The workflow runner configures each table processor and calls its entry point,
-# which invokes Blueprint.processor(...).execute().
-LocalWorkflowRunner(workflow_path, context).run()
+# The workflow runner configures the selected table processor and calls its
+# entry point, which invokes Blueprint.processor(...).execute().
+LocalWorkflowRunner(workflow_path, context).run(processor_name)
 
-print(f"Completed table onboarding workflow {workflow_path.name}; run_id={run_id}")
+print(
+    f"Completed processor {processor_name} for workflow {workflow_path.name}; "
+    f"run_id={run_id}"
+)

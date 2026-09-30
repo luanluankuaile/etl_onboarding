@@ -63,13 +63,23 @@ class LocalWorkflowRunner:
             raise ValueError(f"Processor path must be module.callable: {path}")
         return getattr(import_module(module_name), attribute)
 
-    def run(self) -> None:
+    def _execute_definition(self, definition: ProcessorDefinition) -> None:
+        self.context.processor_parameters = {"processor_name": definition.processor_name, **definition.parameters}
+        self.context.source_metadata = {"tables": definition.source_tables}
+        self.context.target_metadata = {"tables": definition.target_tables}
+        self.registry.execute(definition.processor_name, self.context)
+
+    def run(self, processor_name: str | None = None) -> None:
+        if processor_name is not None:
+            for definition in self.definitions:
+                if definition.processor_name == processor_name:
+                    self._execute_definition(definition)
+                    return
+            raise ValueError(f"Unknown processor_name: {processor_name}")
+
         dag = DAG()
         for definition in self.definitions:
             def task(_: RuntimeContext, definition: ProcessorDefinition = definition):
-                self.context.processor_parameters = {"processor_name": definition.processor_name, **definition.parameters}
-                self.context.source_metadata = {"tables": definition.source_tables}
-                self.context.target_metadata = {"tables": definition.target_tables}
-                self.registry.execute(definition.processor_name, self.context)
+                self._execute_definition(definition)
             dag.add(definition.processor_name, task, definition.depends_on)
         dag.run(self.context)
