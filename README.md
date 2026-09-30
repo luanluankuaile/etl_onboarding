@@ -29,6 +29,10 @@ ETLRunner(metadata, context).run()
 
 The three data layers have separate SQLite files. `etl_control.sqlite` records runs, processors, row counts, file manifests and watermarks. Processed files are skipped on subsequent runs. Persistent rows receive `run_id`, `environment`, `latest_update_datetime`, and `latest_insert_datetime`; invalid not-null rows are written to the configured quarantine table.
 
+See [the local architecture guide](docs/local_etl_architecture.md) for the layer
+contracts, table/workflow YAML examples, and notebook-compatible Python processor
+entry points.
+
 ## Metadata and extension points
 
 `persistent[].columns` supports `name`, optional `source`, SQLite-compatible `type`, `nullable`, and `default`; `keys` enables upsert semantics and `deduplicate_by` removes repeated source keys within a load. Consumption SQL can reference Persistent tables through the attached `source` database (for example `source.customers`). Ordinary Python callables can be composed with `etl_framework.workflow.DAG` for custom processors.

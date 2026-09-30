@@ -1,6 +1,5 @@
 import sqlite3
 from pathlib import Path
-from typing import Any
 
 
 class ControlService:
@@ -54,3 +53,17 @@ class ControlService:
     def mark_file_processed(self, checksum: str, path: str, run_id: str, processed_at: str, source_table: str = "CI_ACCT") -> None:
         with self.connection() as c:
             c.execute("INSERT OR IGNORE INTO processed_file_ledger VALUES (?,?,?,?)", (checksum, source_table + ":" + path, processed_at, run_id))
+
+    def is_file_processed(self, checksum: str) -> bool:
+        with self.connection() as c:
+            return c.execute(
+                "SELECT 1 FROM processed_file_ledger WHERE checksum=?", (checksum,)
+            ).fetchone() is not None
+
+    def previous_successful_process_date(self) -> str | None:
+        with self.connection() as c:
+            row = c.execute(
+                "SELECT ended_at FROM runs WHERE status='SUCCEEDED' "
+                "AND ended_at IS NOT NULL ORDER BY ended_at DESC LIMIT 1"
+            ).fetchone()
+            return row[0] if row else None

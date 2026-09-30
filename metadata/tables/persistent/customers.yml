@@ -1,0 +1,17 @@
+table_name: customers
+database_layer: persistent
+table_update_mode: incremental_upsert
+primary_keys: [customer_id]
+columns:
+  - name: customer_id
+    source: customer_id
+    type: INTEGER
+    nullable: false
+  - name: name
+    source: name
+    type: TEXT
+    nullable: false
+  - name: email
+    source: email
+    type: TEXT
+    nullable: true

@@ -1,0 +1,86 @@
+# EPMLDATAAI-94 CI_ACCT onboarding metadata.
+# attr_* names are the governed source contract; confirm approved headers before production.
+# NOTE: duplicate top-level keys removed — YAML silently drops earlier keys with the same name.
+entity: CI_ACCT
+domain: cust
+
+source:
+  system: SharePoint
+  # Deployment must resolve this environment reference before production registration.
+  location: "${SHAREPOINT_LOCATION}"
+  type: sharepoint_csv
+  path: /Documents/share/temp/bamboo_ai/source/*.csv
+  file_pattern: "CI_ACCT_*.csv"
+  encoding: utf-8-sig
+  delimiter: ","
+  load_frequency: daily
+  start_time: "04:00"
+  timezone: UTC
+  checksum: sha256
+
+schedule:
+  frequency: daily
+  hour: 4
+
+data_processors:
+  - processor_name: cust_ci_acct_land_to_raw
+    notebook: etl_framework.notebook_processors.landing_to_raw
+    source_tables: []
+    target_tables: [raw.raw_cust_ci_acct]
+  - processor_name: cust_ci_acct_raw_to_per
+    notebook: etl_framework.notebook_processors.raw_to_persistent
+    depends_on: [cust_ci_acct_land_to_raw]
+    source_tables: [raw.raw_cust_ci_acct]
+    target_tables: [persistent.per_cust_ci_acct]
+  - processor_name: cust_ci_acct_per_to_consumption
+    notebook: etl_framework.notebook_processors.persistent_to_consumption
+    depends_on: [cust_ci_acct_raw_to_per]
+    source_tables: [persistent.per_cust_ci_acct]
+    target_tables: [consumption.csp_dim_account]
+
+landing:
+  table: land_cust_ci_acct
+  raw_table: raw_cust_ci_acct
+  file_pattern: "CI_ACCT_*.csv"
+  preserve_source: true
+  checksum_skip: true
+  required_columns: [acct_id, version]
+  validation:
+    exact_column_count: 18
+    required_columns: [acct_id, version]
+    reject_unknown_columns: true
+    quarantine: land_cust_ci_acct__quarantine
+
+table_metadata:
+  raw: ../tables/raw/ci_acct.yml
+  persistent:
+    - ../tables/persistent/ci_acct.yml
+
+lineage:
+  edges:
+    - {from: SharePoint.CI_ACCT, to: land_cust_ci_acct}
+    - {from: land_cust_ci_acct, to: raw_cust_ci_acct}
+    - {from: raw_cust_ci_acct, to: per_cust_ci_acct}
+    - {from: per_cust_ci_acct, to: csp_dim_account}
+  source_path: /Documents/share/temp/bamboo_ai/source/*.csv
+  landing_table: land_cust_ci_acct
+  raw_table: raw_cust_ci_acct
+  persistent_table: per_cust_ci_acct
+
+consumption:
+  table: csp_dim_account
+  source_table: per_cust_ci_acct
+  mapping: |
+    SELECT acct_id, version, attr_01, attr_02, attr_03, attr_04,
+           attr_05, attr_06, attr_07, attr_08, attr_09, attr_10,
+          attr_11, attr_12, attr_13, attr_14, attr_15, attr_16,
+          run_id, environment, latest_update_datetime, latest_insert_datetime
+        FROM source.per_cust_ci_acct
+
+control:
+  watermark: version
+  advance_after: landing_raw_persistent_success
+
+governance:
+  approval_required: true
+  data_owner_review_required: true
