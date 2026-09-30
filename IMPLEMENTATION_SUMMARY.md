@@ -7,7 +7,7 @@ Implementation of CI_ACCT table onboarding into the Databricks metadata-driven E
 
 ### Files Created/Modified
 
-#### 1. **metadata/ci_acct.yml** (Existing, Validated)
+#### 1. **metadata/workflows/customer_process_daily.yaml** (Existing, Validated)
 - Dataset metadata configuration
 - Source: SharePoint CSV files (CI_ACCT_*.csv)
 - Load frequency: Daily, 04:00 UTC

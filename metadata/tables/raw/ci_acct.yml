@@ -1,0 +1,22 @@
+table_name: raw_cust_ci_acct
+database_layer: raw
+mode: C
+lookback_days: 1
+incremental_key: [acct_id, version]
+watermark:
+  strategy: per_account
+  account_column: acct_id
+  version_column: version
+deduplicate_by: [acct_id, version]
+record_hash_columns: all
+primary_keys: [acct_id]
+version_column: version
+standardize: [trim_whitespace, cast_version_integer]
+select_latest_per_key: true
+data_quality_checks:
+  - rule: col_is_not_null
+    columns: [acct_id, version]
+  - rule: is_integer
+    columns: [version]
+  - rule: non_negative
+    columns: [version]

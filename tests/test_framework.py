@@ -31,7 +31,7 @@ def test_ci_acct_end_to_end(tmp_path: Path):
     csv_content += "A002,CYCB,2024-01-02,USD,GRP2,2024-02-02,N,DIV2,PREM2,Y,CL2,2024-03-02,2024-03-16,N,CCL2,Y,Y,1\n"
     (landing / "CI_ACCT_1.csv").write_text(csv_content, encoding="utf-8")
     
-    metadata = load_metadata(Path(__file__).parents[1] / "metadata/ci_acct.yml")
+    metadata = load_metadata(Path(__file__).parents[1] / "metadata/workflows/customer_process_daily.yaml")
     context = RuntimeContext("run-1", landing_dir=landing, raw_db=landing / "raw.sqlite", persistent_db=landing / "persistent.sqlite", consumption_db=landing / "consumption.sqlite", control_db=landing / "control.sqlite")
     ETLRunner(metadata, context).run()
     

@@ -1,0 +1,30 @@
+table_name: per_cust_ci_acct
+database_layer: persistent
+source_table: raw_cust_ci_acct
+table_update_mode: incremental_upsert
+primary_keys: [acct_id]
+deduplicate_by: [acct_id, version]
+type: SCD1
+strategy: SCD1
+update_when: "incoming.version > current.version"
+conflict_policy: quarantine
+current_state_only: true
+columns:
+  - {name: acct_id, source: acct_id, type: TEXT, nullable: false}
+  - {name: version, source: version, type: INTEGER, nullable: false}
+  - {name: attr_01, source: attr_01, type: TEXT, nullable: true}
+  - {name: attr_02, source: attr_02, type: TEXT, nullable: true}
+  - {name: attr_03, source: attr_03, type: TEXT, nullable: true}
+  - {name: attr_04, source: attr_04, type: TEXT, nullable: true}
+  - {name: attr_05, source: attr_05, type: TEXT, nullable: true}
+  - {name: attr_06, source: attr_06, type: TEXT, nullable: true}
+  - {name: attr_07, source: attr_07, type: TEXT, nullable: true}
+  - {name: attr_08, source: attr_08, type: TEXT, nullable: true}
+  - {name: attr_09, source: attr_09, type: TEXT, nullable: true}
+  - {name: attr_10, source: attr_10, type: TEXT, nullable: true}
+  - {name: attr_11, source: attr_11, type: TEXT, nullable: true}
+  - {name: attr_12, source: attr_12, type: TEXT, nullable: true}
+  - {name: attr_13, source: attr_13, type: TEXT, nullable: true}
+  - {name: attr_14, source: attr_14, type: TEXT, nullable: true}
+  - {name: attr_15, source: attr_15, type: TEXT, nullable: true}
+  - {name: attr_16, source: attr_16, type: TEXT, nullable: true}

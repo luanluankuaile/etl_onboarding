@@ -1,0 +1,15 @@
+table_name: raw_customers
+database_layer: raw
+columns:
+  - name: customer_id
+    type: TEXT
+    nullable: false
+  - name: name
+    type: TEXT
+    nullable: true
+  - name: email
+    type: TEXT
+    nullable: true
+data_quality_checks:
+  - rule: col_is_not_null
+    columns: [customer_id]

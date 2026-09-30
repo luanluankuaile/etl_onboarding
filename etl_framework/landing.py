@@ -9,7 +9,9 @@ def discover_csv(context: RuntimeContext, control: ControlService, pattern: str 
     files = []
     for path in sorted(context.landing_dir.glob(pattern)):
         checksum = hashlib.sha256(path.read_bytes()).hexdigest()
-        if control.manifest(str(path), path.stat().st_size, path.stat().st_mtime, checksum, context.run_id, utc_now()):
+        if not control.is_file_processed(checksum):
+            control.manifest(str(path), path.stat().st_size, path.stat().st_mtime, checksum,
+                             context.run_id, utc_now())
             files.append(path)
     return files
 
