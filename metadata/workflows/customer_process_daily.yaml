@@ -24,16 +24,16 @@ schedule:
 
 data_processors:
   - processor_name: cust_ci_acct_land_to_raw
-    notebook: etl_framework.notebook_processors.landing_to_raw
+    notebook: etl_framework.blueprints.landing_to_raw.execute
     source_tables: []
     target_tables: [raw.raw_cust_ci_acct]
   - processor_name: cust_ci_acct_raw_to_per
-    notebook: etl_framework.notebook_processors.raw_to_persistent
+    notebook: etl_framework.blueprints.raw_to_persistent.execute
     depends_on: [cust_ci_acct_land_to_raw]
     source_tables: [raw.raw_cust_ci_acct]
     target_tables: [persistent.per_cust_ci_acct]
   - processor_name: cust_ci_acct_per_to_consumption
-    notebook: etl_framework.notebook_processors.persistent_to_consumption
+    notebook: etl_framework.blueprints.persistent_to_consumption.execute
     depends_on: [cust_ci_acct_raw_to_per]
     source_tables: [persistent.per_cust_ci_acct]
     target_tables: [consumption.csp_dim_account]

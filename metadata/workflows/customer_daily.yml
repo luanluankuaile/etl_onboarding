@@ -3,18 +3,18 @@ data_domain: customer
 schedule: daily
 data_processors:
   - processor_name: customer_customers_land_to_raw
-    notebook: etl_framework.notebook_processors.landing_to_raw
+    notebook: etl_framework.blueprints.landing_to_raw.execute
     source_tables: []
     target_tables: [raw.customers]
     parameters:
       fail_on_no_new_data: false
   - processor_name: customer_customers_raw_to_per
-    notebook: etl_framework.notebook_processors.raw_to_persistent
+    notebook: etl_framework.blueprints.raw_to_persistent.execute
     depends_on: [customer_customers_land_to_raw]
     source_tables: [raw.customers]
     target_tables: [persistent.customers]
   - processor_name: customer_customers_per_to_consumption
-    notebook: etl_framework.notebook_processors.persistent_to_consumption
+    notebook: etl_framework.blueprints.persistent_to_consumption.execute
     depends_on: [customer_customers_raw_to_per]
     source_tables: [persistent.customers]
     target_tables: [consumption.customer_emails]

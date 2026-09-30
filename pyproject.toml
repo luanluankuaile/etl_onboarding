@@ -9,6 +9,9 @@ description = "Local metadata-driven Landing to Consumption ETL framework"
 requires-python = ">=3.9"
 dependencies = ["PyYAML>=6.0"]
 
+[project.scripts]
+sync_catalog = "etl_framework.databricks_catalog:main"
+
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
 

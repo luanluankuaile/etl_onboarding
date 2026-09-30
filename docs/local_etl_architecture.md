@@ -14,9 +14,8 @@ metadata/
   tables/persistent/             # typed mappings and upsert keys
   workflows/                     # processor DAGs
 etl_framework/
-  blueprints.py                  # LandingToRaw, RawToPersistent, PersistentToConsumption
+  blueprints/                    # one Blueprint and notebook entry point per layer
   workflow_runner.py             # YAML DAG executor
-  notebook_processors.py         # ordinary-Python processor entry points
 ```
 
 `LandingToRawBlueprint` preserves CSV values and appends `arrival_date`, source-file
@@ -59,7 +58,7 @@ the resulting `DataProcessor` invokes the Blueprint's `extract`, `transform`, an
 ```yaml
 data_processors:
   - processor_name: customer_customers_raw_to_per
-    notebook: etl_framework.notebook_processors.raw_to_persistent
+    notebook: etl_framework.blueprints.raw_to_persistent.execute
     depends_on: [customer_customers_land_to_raw]
     source_tables: [raw.customers]
     target_tables: [persistent.customers]

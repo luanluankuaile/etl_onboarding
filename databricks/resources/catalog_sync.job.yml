@@ -1,0 +1,24 @@
+resources:
+  jobs:
+    metadata_catalog_sync:
+      name: metadata-catalog-sync-${bundle.target}
+      job_clusters:
+        - job_cluster_key: catalog_sync
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: ${var.node_type_id}
+            num_workers: 1
+            data_security_mode: ${var.data_security_mode}
+      tasks:
+        - task_key: sync_table_catalog
+          job_cluster_key: catalog_sync
+          python_wheel_task:
+            package_name: local_metadata_etl
+            entry_point: sync_catalog
+            parameters:
+              - --metadata-root
+              - ${workspace.file_path}/metadata
+              - --catalog
+              - ${var.catalog_name}
+          libraries:
+            - whl: ./dist/*.whl

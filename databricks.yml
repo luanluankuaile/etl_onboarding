@@ -1,0 +1,50 @@
+bundle:
+  name: metadata-etl
+
+include:
+  - databricks/resources/*.yml
+
+artifacts:
+  default:
+    type: whl
+    path: .
+    build: python -m pip wheel . --wheel-dir dist
+
+sync:
+  include:
+    - metadata/**
+
+variables:
+  databricks_host:
+    description: Databricks workspace URL.
+  catalog_name:
+    description: Unity Catalog name to synchronize from table metadata.
+  node_type_id:
+    description: Node type for the catalog synchronization job cluster.
+  data_security_mode:
+    description: Databricks data security mode for the catalog synchronization job.
+
+targets:
+  dev:
+    default: true
+    workspace:
+      host: ${var.databricks_host}
+    variables:
+      catalog_name: etl_dev
+      node_type_id: Standard_DS3_v2
+      data_security_mode: SINGLE_USER
+  staging:
+    workspace:
+      host: ${var.databricks_host}
+    variables:
+      catalog_name: etl_staging
+      node_type_id: Standard_DS3_v2
+      data_security_mode: SINGLE_USER
+  prod:
+    mode: production
+    workspace:
+      host: ${var.databricks_host}
+    variables:
+      catalog_name: etl_prod
+      node_type_id: Standard_DS4_v2
+      data_security_mode: SINGLE_USER

@@ -1,0 +1,4 @@
+table_name: csp_dim_account
+database_layer: consumption
+source_table: per_cust_ci_acct
+table_update_mode: replace

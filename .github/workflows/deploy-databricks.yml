@@ -1,0 +1,44 @@
+name: Deploy Databricks Metadata ETL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - databricks.yml
+      - databricks/**
+      - etl_framework/**
+      - metadata/**
+      - pyproject.toml
+      - requirements.txt
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Databricks bundle target
+        required: true
+        default: dev
+        type: choice
+        options: [dev, staging, prod]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target || 'prod' }}
+    env:
+      BUNDLE_TARGET: ${{ github.event.inputs.target || 'prod' }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+      DATABRICKS_NODE_TYPE: ${{ vars.DATABRICKS_NODE_TYPE }}
+      DATABRICKS_DATA_SECURITY_MODE: ${{ vars.DATABRICKS_DATA_SECURITY_MODE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: databricks/setup-cli@main
+      - name: Validate bundle
+        run: databricks bundle validate -t "$BUNDLE_TARGET" --var "databricks_host=$DATABRICKS_HOST" --var "catalog_name=$DATABRICKS_CATALOG" --var "node_type_id=$DATABRICKS_NODE_TYPE" --var "data_security_mode=$DATABRICKS_DATA_SECURITY_MODE"
+      - name: Deploy bundle
+        run: databricks bundle deploy -t "$BUNDLE_TARGET" --var "databricks_host=$DATABRICKS_HOST" --var "catalog_name=$DATABRICKS_CATALOG" --var "node_type_id=$DATABRICKS_NODE_TYPE" --var "data_security_mode=$DATABRICKS_DATA_SECURITY_MODE"
+      - name: Synchronize Unity Catalog
+        run: databricks bundle run metadata_catalog_sync -t "$BUNDLE_TARGET" --var "databricks_host=$DATABRICKS_HOST" --var "catalog_name=$DATABRICKS_CATALOG" --var "node_type_id=$DATABRICKS_NODE_TYPE" --var "data_security_mode=$DATABRICKS_DATA_SECURITY_MODE"
